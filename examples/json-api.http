@@ -1,0 +1,344 @@
+# RESTful API Testing Examples
+# This file demonstrates testing a complete REST API using JSONPlaceholder
+# JSONPlaceholder is a free fake REST API for testing and prototyping
+
+# =============================================================================
+# POSTS API - Demonstrates CRUD operations on blog posts
+# =============================================================================
+
+# GET all posts
+# Retrieves a list of all posts
+GET https://jsonplaceholder.typicode.com/posts
+Accept: application/json
+
+###
+
+# GET a single post by ID
+# Retrieves post with ID 1
+GET https://jsonplaceholder.typicode.com/posts/1
+Accept: application/json
+
+###
+
+# GET posts with query parameters
+# Filter posts by userId
+GET https://jsonplaceholder.typicode.com/posts?userId=1
+Accept: application/json
+
+###
+
+# CREATE a new post
+# JSONPlaceholder simulates creation but doesn't persist data
+POST https://jsonplaceholder.typicode.com/posts
+Content-Type: application/json
+
+{
+  "title": "My New Post",
+  "body": "This is the content of my new post. It demonstrates creating a resource via POST request.",
+  "userId": 1
+}
+
+###
+
+# UPDATE a post completely (PUT)
+# PUT replaces the entire resource
+PUT https://jsonplaceholder.typicode.com/posts/1
+Content-Type: application/json
+
+{
+  "id": 1,
+  "title": "Updated Post Title",
+  "body": "This is the completely updated content of the post.",
+  "userId": 1
+}
+
+###
+
+# UPDATE a post partially (PATCH)
+# PATCH updates only specified fields
+PATCH https://jsonplaceholder.typicode.com/posts/1
+Content-Type: application/json
+
+{
+  "title": "Partially Updated Title"
+}
+
+###
+
+# DELETE a post
+# Removes the resource (simulated)
+DELETE https://jsonplaceholder.typicode.com/posts/1
+
+###
+
+# =============================================================================
+# COMMENTS API - Nested resources and filtering
+# =============================================================================
+
+# GET all comments
+GET https://jsonplaceholder.typicode.com/comments
+Accept: application/json
+
+###
+
+# GET comments for a specific post
+# Using query parameter to filter
+GET https://jsonplaceholder.typicode.com/comments?postId=1
+Accept: application/json
+
+###
+
+# GET comments via nested route
+# Alternative way to get post comments
+GET https://jsonplaceholder.typicode.com/posts/1/comments
+Accept: application/json
+
+###
+
+# CREATE a new comment
+POST https://jsonplaceholder.typicode.com/comments
+Content-Type: application/json
+
+{
+  "postId": 1,
+  "name": "New Comment",
+  "email": "commenter@example.com",
+  "body": "This is a thoughtful comment on the post."
+}
+
+###
+
+# =============================================================================
+# USERS API - Testing user management endpoints
+# =============================================================================
+
+# GET all users
+GET https://jsonplaceholder.typicode.com/users
+Accept: application/json
+
+###
+
+# GET a specific user
+GET https://jsonplaceholder.typicode.com/users/1
+Accept: application/json
+
+###
+
+# GET user's posts
+GET https://jsonplaceholder.typicode.com/users/1/posts
+Accept: application/json
+
+###
+
+# CREATE a new user
+POST https://jsonplaceholder.typicode.com/users
+Content-Type: application/json
+
+{
+  "name": "Jane Smith",
+  "username": "janesmith",
+  "email": "jane.smith@example.com",
+  "address": {
+    "street": "123 Main St",
+    "suite": "Apt. 4",
+    "city": "Springfield",
+    "zipcode": "12345",
+    "geo": {
+      "lat": "-37.3159",
+      "lng": "81.1496"
+    }
+  },
+  "phone": "555-1234",
+  "website": "janesmith.com",
+  "company": {
+    "name": "Smith Solutions",
+    "catchPhrase": "Innovative solutions for modern problems",
+    "bs": "revolutionize virtual markets"
+  }
+}
+
+###
+
+# UPDATE user information
+PUT https://jsonplaceholder.typicode.com/users/1
+Content-Type: application/json
+
+{
+  "id": 1,
+  "name": "Leanne Graham Updated",
+  "username": "Bret",
+  "email": "updated.email@example.com"
+}
+
+###
+
+# =============================================================================
+# ALBUMS & PHOTOS API - Testing related resources
+# =============================================================================
+
+# GET all albums
+GET https://jsonplaceholder.typicode.com/albums
+Accept: application/json
+
+###
+
+# GET user's albums
+GET https://jsonplaceholder.typicode.com/users/1/albums
+Accept: application/json
+
+###
+
+# GET photos in an album
+GET https://jsonplaceholder.typicode.com/albums/1/photos
+Accept: application/json
+
+###
+
+# GET a specific photo
+GET https://jsonplaceholder.typicode.com/photos/1
+Accept: application/json
+
+###
+
+# CREATE a new album
+POST https://jsonplaceholder.typicode.com/albums
+Content-Type: application/json
+
+{
+  "userId": 1,
+  "title": "My Vacation Photos"
+}
+
+###
+
+# =============================================================================
+# TODOS API - Task management endpoints
+# =============================================================================
+
+# GET all todos
+GET https://jsonplaceholder.typicode.com/todos
+Accept: application/json
+
+###
+
+# GET user's todos
+GET https://jsonplaceholder.typicode.com/users/1/todos
+Accept: application/json
+
+###
+
+# GET completed todos only
+GET https://jsonplaceholder.typicode.com/todos?completed=true
+Accept: application/json
+
+###
+
+# CREATE a new todo
+POST https://jsonplaceholder.typicode.com/todos
+Content-Type: application/json
+
+{
+  "userId": 1,
+  "title": "Complete REST API testing",
+  "completed": false
+}
+
+###
+
+# Mark todo as completed
+PATCH https://jsonplaceholder.typicode.com/todos/1
+Content-Type: application/json
+
+{
+  "completed": true
+}
+
+###
+
+# DELETE a todo
+DELETE https://jsonplaceholder.typicode.com/todos/1
+
+###
+
+# =============================================================================
+# ADVANCED EXAMPLES - Complex scenarios
+# =============================================================================
+
+# Multiple query parameters
+# Get posts from user 1 that are published
+GET https://jsonplaceholder.typicode.com/posts?userId=1&_limit=5
+Accept: application/json
+
+###
+
+# Pagination example
+# Get 10 posts starting from post 20
+GET https://jsonplaceholder.typicode.com/posts?_start=20&_limit=10
+Accept: application/json
+
+###
+
+# Sorting example
+# Get posts sorted by title in descending order
+GET https://jsonplaceholder.typicode.com/posts?_sort=title&_order=desc
+Accept: application/json
+
+###
+
+# Nested object creation
+POST https://jsonplaceholder.typicode.com/posts
+Content-Type: application/json
+X-Custom-Header: testing-nested-data
+
+{
+  "title": "Understanding JSON APIs",
+  "body": "This post explains how to work with JSON APIs effectively.",
+  "userId": 1,
+  "metadata": {
+    "tags": ["api", "rest", "json"],
+    "category": "tutorial",
+    "featured": true,
+    "stats": {
+      "views": 0,
+      "likes": 0
+    }
+  }
+}
+
+###
+
+# Array data in POST request
+POST https://jsonplaceholder.typicode.com/posts
+Content-Type: application/json
+
+{
+  "title": "Batch Operations",
+  "body": "Working with multiple items",
+  "userId": 1,
+  "tags": ["batch", "multiple", "array"],
+  "collaborators": [
+    {"userId": 2, "role": "editor"},
+    {"userId": 3, "role": "reviewer"}
+  ]
+}
+
+###
+
+# Testing error handling
+# This should return 404 as the resource doesn't exist
+GET https://jsonplaceholder.typicode.com/posts/999999
+Accept: application/json
+
+###
+
+# Request with special characters in body
+POST https://jsonplaceholder.typicode.com/posts
+Content-Type: application/json
+
+{
+  "title": "Special Characters: @#$%^&*()",
+  "body": "Testing unicode: 你好世界 🌍 café",
+  "userId": 1
+}
+
+###

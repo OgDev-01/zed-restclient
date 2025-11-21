@@ -1,0 +1,61 @@
+# Test HTTP Request File
+# This file tests syntax highlighting for .http files
+
+### Simple GET Request
+GET https://api.github.com/users/octocat
+
+### GET with Headers
+GET https://jsonplaceholder.typicode.com/posts/1
+Accept: application/json
+User-Agent: REST-Client/1.0
+Authorization: Bearer {{authToken}}
+
+### POST Request with JSON Body
+POST https://jsonplaceholder.typicode.com/posts
+Content-Type: application/json
+
+{
+  "title": "Test Post",
+  "body": "This is a test",
+  "userId": 1,
+  "active": true,
+  "count": 42,
+  "metadata": null
+}
+
+### PUT Request with Variables
+PUT https://api.example.com/users/{{userId}}
+Authorization: Bearer {{$guid}}
+Content-Type: application/json
+
+{
+  "name": "{{userName}}",
+  "timestamp": "{{$timestamp}}",
+  "updated": true
+}
+
+### DELETE Request
+DELETE https://api.example.com/posts/123
+Authorization: Bearer {{token}}
+
+// This is also a comment
+// Multiple comment styles are supported
+
+### Request with Query Parameters
+GET https://api.example.com/search?q={{searchTerm}}&limit=10
+Accept: application/json
+
+### PATCH Request
+PATCH https://api.example.com/users/456 HTTP/1.1
+Content-Type: application/json
+
+{
+  "status": "active"
+}
+
+/* Block comment
+   Multiple lines
+   Also supported */
+
+### OPTIONS Request
+OPTIONS https://api.example.com/resource

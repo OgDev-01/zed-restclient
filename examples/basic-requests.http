@@ -1,0 +1,176 @@
+# Basic HTTP Requests Examples
+# This file demonstrates basic HTTP request syntax for the REST Client extension
+
+# Simple GET request - fetch a resource
+# No body needed for GET requests
+GET https://httpbin.org/get
+
+###
+
+# GET request with custom headers
+# Headers are specified one per line after the request line
+GET https://httpbin.org/headers
+Accept: application/json
+User-Agent: REST-Client-Zed/1.0
+X-Custom-Header: CustomValue
+
+###
+
+# GET request with query parameters
+# You can include query parameters directly in the URL
+GET https://httpbin.org/get?name=John&age=30&city=NewYork
+
+###
+
+# POST request with JSON body
+# The body starts after a blank line following the headers
+POST https://httpbin.org/post
+Content-Type: application/json
+Accept: application/json
+
+{
+  "name": "John Doe",
+  "email": "john.doe@example.com",
+  "age": 30,
+  "active": true
+}
+
+###
+
+# POST request with form data
+# Use application/x-www-form-urlencoded for form submissions
+POST https://httpbin.org/post
+Content-Type: application/x-www-form-urlencoded
+
+name=John+Doe&email=john.doe@example.com&subscription=newsletter
+
+###
+
+# PUT request - update a resource
+# PUT typically includes the complete updated resource
+PUT https://httpbin.org/put
+Content-Type: application/json
+Authorization: Bearer your-token-here
+
+{
+  "id": 123,
+  "name": "John Doe Updated",
+  "email": "john.updated@example.com",
+  "status": "active"
+}
+
+###
+
+# PATCH request - partial update
+# PATCH sends only the fields that need to be updated
+PATCH https://httpbin.org/patch
+Content-Type: application/json
+
+{
+  "status": "inactive"
+}
+
+###
+
+# DELETE request - remove a resource
+# DELETE requests typically don't have a body
+DELETE https://httpbin.org/delete
+Authorization: Bearer your-token-here
+
+###
+
+# DELETE with a body (less common but valid)
+DELETE https://httpbin.org/delete
+Content-Type: application/json
+
+{
+  "reason": "User requested account deletion",
+  "confirm": true
+}
+
+###
+
+# Request with multiple headers demonstrating various use cases
+POST https://httpbin.org/post
+Content-Type: application/json
+Accept: application/json
+Accept-Language: en-US,en;q=0.9
+Cache-Control: no-cache
+X-Request-ID: 550e8400-e29b-41d4-a716-446655440000
+
+{
+  "message": "Request with comprehensive headers"
+}
+
+###
+
+# Testing different HTTP versions (HTTP/1.1 is default)
+GET https://httpbin.org/get HTTP/1.1
+Accept: application/json
+
+###
+
+# Request with authentication header
+# Remember: Never commit real credentials to version control!
+GET https://httpbin.org/bearer
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9
+
+###
+
+# Testing response status codes
+# This endpoint returns whatever status code you specify
+GET https://httpbin.org/status/200
+
+###
+
+# Request that returns a delayed response (useful for timeout testing)
+# This waits 2 seconds before responding
+GET https://httpbin.org/delay/2
+
+###
+
+# Request with custom content type
+POST https://httpbin.org/post
+Content-Type: application/xml
+
+<?xml version="1.0" encoding="UTF-8"?>
+<user>
+  <name>John Doe</name>
+  <email>john@example.com</email>
+</user>
+
+###
+
+# Testing redirects
+# This endpoint redirects to /get
+GET https://httpbin.org/redirect-to?url=https://httpbin.org/get
+
+###
+
+# Request returning different content types
+# Get a JSON response
+GET https://httpbin.org/json
+
+###
+
+# Get an HTML response
+GET https://httpbin.org/html
+
+###
+
+# Get an XML response
+GET https://httpbin.org/xml
+
+###
+
+# Get a UTF-8 encoded response
+GET https://httpbin.org/encoding/utf8
+
+###
+
+# Request with basic authentication
+# Format: username:password encoded in base64
+GET https://httpbin.org/basic-auth/user/passwd
+Authorization: Basic dXNlcjpwYXNzd2Q=
+
+###
