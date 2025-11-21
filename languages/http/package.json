@@ -1,0 +1,16 @@
+{
+  "name": "http",
+  "version": "1.0.0",
+  "description": "This directory contains the language configuration for HTTP request files (`.http` and `.rest` extensions).",
+  "main": "grammar.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "devDependencies": {
+    "tree-sitter-cli": "^0.25.10"
+  }
+}

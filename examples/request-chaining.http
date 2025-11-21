@@ -1,0 +1,175 @@
+### Request Chaining Examples
+### This file demonstrates how to capture values from HTTP responses
+### and use them in subsequent requests.
+
+### Example 1: Simple JSONPath Capture
+### This example shows how to capture a token from a login response
+POST https://jsonplaceholder.typicode.com/posts
+Content-Type: application/json
+
+{
+  "title": "foo",
+  "body": "bar",
+  "userId": 1
+}
+
+# @capture postId = $.id
+# @capture postTitle = $.title
+
+### Use the captured postId in the next request
+GET https://jsonplaceholder.typicode.com/posts/{{postId}}
+
+###
+
+### Example 2: Nested JSON Path Capture
+### Demonstrates extracting values from nested JSON structures
+GET https://jsonplaceholder.typicode.com/users/1
+
+# @capture userId = $.id
+# @capture userName = $.username
+# @capture userEmail = $.email
+# @capture userCity = $.address.city
+# @capture userCompany = $.company.name
+
+### Use captured user data in a new post
+POST https://jsonplaceholder.typicode.com/posts
+Content-Type: application/json
+
+{
+  "title": "Post by {{userName}}",
+  "body": "This post is from {{userCity}}",
+  "userId": {{userId}}
+}
+
+###
+
+### Example 3: Array Index Access
+### Extract values from array elements
+GET https://jsonplaceholder.typicode.com/posts
+
+# @capture firstPostId = $[0].id
+# @capture firstPostTitle = $[0].title
+# @capture secondPostUserId = $[1].userId
+
+### Fetch the first post
+GET https://jsonplaceholder.typicode.com/posts/{{firstPostId}}
+
+###
+
+### Example 4: Header Capture
+### This example shows how to capture header values
+### (Using a mock example - replace with actual API that returns custom headers)
+GET https://jsonplaceholder.typicode.com/posts/1
+
+# @capture contentType = headers.Content-Type
+# @capture cacheControl = headers.Cache-Control
+
+### The captured headers can be used in subsequent requests
+### GET https://api.example.com/data
+### X-Captured-Type: {{contentType}}
+
+###
+
+### Example 5: Authentication Flow
+### Typical login -> use token pattern
+### (Mock example - replace with actual auth endpoint)
+POST https://jsonplaceholder.typicode.com/posts
+Content-Type: application/json
+
+{
+  "username": "admin",
+  "password": "secret"
+}
+
+# @capture authToken = $.id
+# In a real API, this would be something like $.access_token
+
+### Use the auth token in subsequent authenticated requests
+GET https://jsonplaceholder.typicode.com/posts
+Authorization: Bearer {{authToken}}
+
+###
+
+### Example 6: Multiple Captures
+### Capture multiple values from a single response
+GET https://jsonplaceholder.typicode.com/users/1
+
+# @capture id = $.id
+# @capture name = $.name
+# @capture email = $.email
+# @capture phone = $.phone
+# @capture website = $.website
+# @capture lat = $.address.geo.lat
+# @capture lng = $.address.geo.lng
+
+### Create a summary using all captured values
+POST https://jsonplaceholder.typicode.com/posts
+Content-Type: application/json
+
+{
+  "title": "User Profile: {{name}}",
+  "body": "Contact: {{email}} | {{phone}} | {{website}} | Location: {{lat}},{{lng}}",
+  "userId": {{id}}
+}
+
+###
+
+### Example 7: Chaining Multiple Requests
+### Create a post, then add a comment to it
+POST https://jsonplaceholder.typicode.com/posts
+Content-Type: application/json
+
+{
+  "title": "My New Post",
+  "body": "This is the content of my post",
+  "userId": 1
+}
+
+# @capture newPostId = $.id
+
+### Add a comment to the newly created post
+POST https://jsonplaceholder.typicode.com/posts/{{newPostId}}/comments
+Content-Type: application/json
+
+{
+  "name": "John Doe",
+  "email": "john@example.com",
+  "body": "Great post!"
+}
+
+# @capture commentId = $.id
+
+### Verify the comment was created
+GET https://jsonplaceholder.typicode.com/comments/{{commentId}}
+
+###
+
+### Example 8: Conditional Data Extraction
+### Extract different data types (string, number, boolean, null)
+GET https://jsonplaceholder.typicode.com/todos/1
+
+# @capture todoId = $.id
+# @capture todoTitle = $.title
+# @capture todoCompleted = $.completed
+# @capture todoUserId = $.userId
+
+### Use the captured data
+POST https://jsonplaceholder.typicode.com/posts
+Content-Type: application/json
+
+{
+  "title": "Todo Status: {{todoTitle}}",
+  "body": "Todo #{{todoId}} completed: {{todoCompleted}}",
+  "userId": {{todoUserId}}
+}
+
+###
+
+### Notes:
+### 1. Capture directives must be placed immediately after the request (before ###)
+### 2. Variables are scoped to the file and available to requests below the capture
+### 3. JSONPath syntax: Use $. notation (e.g., $.user.name, $.items[0].id)
+### 4. Header syntax: Use headers.HeaderName (e.g., headers.Authorization)
+### 5. Captured values are stored as strings
+### 6. Arrays and objects are serialized as JSON strings
+### 7. Variables are cleared when the file is edited or reloaded

@@ -1,0 +1,315 @@
+# cURL Import and Export Examples
+
+This file demonstrates the cURL import/export functionality of the REST Client.
+You can paste cURL commands and convert them to HTTP requests, or copy requests as cURL.
+
+## Basic cURL Examples
+
+### Simple GET Request
+# Original cURL:
+# curl https://api.github.com/users/octocat
+
+GET https://api.github.com/users/octocat
+
+###
+
+### GET with Headers
+# Original cURL:
+# curl -H "Accept: application/vnd.github.v3+json" https://api.github.com/repos/zed-industries/zed
+
+GET https://api.github.com/repos/zed-industries/zed
+Accept: application/vnd.github.v3+json
+
+###
+
+### POST with JSON Data
+# Original cURL:
+# curl -X POST https://httpbin.org/post \
+#   -H "Content-Type: application/json" \
+#   -d '{"name":"John Doe","email":"john@example.com"}'
+
+POST https://httpbin.org/post
+Content-Type: application/json
+
+{
+  "name": "John Doe",
+  "email": "john@example.com"
+}
+
+###
+
+### POST with Form Data
+# Original cURL:
+# curl -X POST https://httpbin.org/post \
+#   -d "username=johndoe" \
+#   -d "password=secret123"
+
+POST https://httpbin.org/post
+Content-Type: application/x-www-form-urlencoded
+
+username=johndoe&password=secret123
+
+###
+
+## Authentication Examples
+
+### Basic Authentication
+# Original cURL:
+# curl -u username:password https://httpbin.org/basic-auth/username/password
+
+GET https://httpbin.org/basic-auth/username/password
+Authorization: Basic dXNlcm5hbWU6cGFzc3dvcmQ=
+
+###
+
+### Bearer Token Authentication
+# Original cURL:
+# curl -H "Authorization: Bearer ghp_abc123def456" https://api.github.com/user
+
+GET https://api.github.com/user
+Authorization: Bearer ghp_abc123def456
+
+###
+
+## Real-World API Examples
+
+### GitHub API - Create Issue
+# Original cURL:
+# curl -X POST https://api.github.com/repos/owner/repo/issues \
+#   -H "Accept: application/vnd.github.v3+json" \
+#   -H "Authorization: Bearer YOUR_TOKEN" \
+#   -d '{"title":"Bug Report","body":"Found a critical bug","labels":["bug","urgent"]}'
+
+POST https://api.github.com/repos/owner/repo/issues
+Accept: application/vnd.github.v3+json
+Authorization: Bearer YOUR_TOKEN
+Content-Type: application/json
+
+{
+  "title": "Bug Report",
+  "body": "Found a critical bug",
+  "labels": ["bug", "urgent"]
+}
+
+###
+
+### Stripe API - Create Charge
+# Original cURL:
+# curl https://api.stripe.com/v1/charges \
+#   -u YOUR_STRIPE_SECRET_KEY: \
+#   -d amount=2000 \
+#   -d currency=usd \
+#   -d source=tok_visa \
+#   -d description="Charge for test"
+
+POST https://api.stripe.com/v1/charges
+Authorization: Basic YOUR_BASE64_ENCODED_STRIPE_KEY
+Content-Type: application/x-www-form-urlencoded
+
+amount=2000&currency=usd&source=tok_visa&description=Charge for test
+
+###
+
+### Slack Webhook - Post Message
+# Original cURL:
+# curl -X POST https://hooks.slack.com/services/YOUR/WEBHOOK/URL \
+#   -H "Content-Type: application/json" \
+#   -d '{"text":"Deployment successful! 🚀"}'
+
+POST https://hooks.slack.com/services/YOUR/WEBHOOK/URL
+Content-Type: application/json
+
+{
+  "text": "Deployment successful! 🚀"
+}
+
+###
+
+### SendGrid API - Send Email
+# Original cURL:
+# curl -X POST https://api.sendgrid.com/v3/mail/send \
+#   -H "Authorization: Bearer YOUR_SENDGRID_API_KEY" \
+#   -H "Content-Type: application/json" \
+#   -d '{
+#     "personalizations": [{"to": [{"email": "recipient@example.com"}]}],
+#     "from": {"email": "sender@example.com"},
+#     "subject": "Test Email",
+#     "content": [{"type": "text/plain", "value": "Hello from REST Client!"}]
+#   }'
+
+POST https://api.sendgrid.com/v3/mail/send
+Authorization: Bearer YOUR_SENDGRID_API_KEY
+Content-Type: application/json
+
+{
+  "personalizations": [
+    {
+      "to": [
+        {
+          "email": "recipient@example.com"
+        }
+      ]
+    }
+  ],
+  "from": {
+    "email": "sender@example.com"
+  },
+  "subject": "Test Email",
+  "content": [
+    {
+      "type": "text/plain",
+      "value": "Hello from REST Client!"
+    }
+  ]
+}
+
+###
+
+## Complex Examples
+
+### PUT Request with Multiple Headers
+# Original cURL:
+# curl -X PUT https://api.example.com/resources/123 \
+#   -H "Content-Type: application/json" \
+#   -H "Accept: application/json" \
+#   -H "X-API-Key: abc123xyz" \
+#   -H "X-Request-ID: req-001" \
+#   -d '{"name":"Updated Resource","status":"active"}'
+
+PUT https://api.example.com/resources/123
+Content-Type: application/json
+Accept: application/json
+X-API-Key: abc123xyz
+X-Request-ID: req-001
+
+{
+  "name": "Updated Resource",
+  "status": "active"
+}
+
+###
+
+### DELETE Request with Custom Headers
+# Original cURL:
+# curl -X DELETE https://api.example.com/resources/456 \
+#   -H "Authorization: Bearer token123" \
+#   -H "X-Confirm-Delete: true"
+
+DELETE https://api.example.com/resources/456
+Authorization: Bearer token123
+X-Confirm-Delete: true
+
+###
+
+### Request with Special Characters
+# Original cURL:
+# curl -X POST https://api.example.com/search \
+#   -H "Content-Type: application/json" \
+#   -d '{"query":"hello & goodbye","filter":"name='John O'\''Brien'"}'
+
+POST https://api.example.com/search
+Content-Type: application/json
+
+{
+  "query": "hello & goodbye",
+  "filter": "name='John O'Brien'"
+}
+
+###
+
+### Request with Query Parameters
+# Original cURL:
+# curl "https://api.example.com/search?q=rust%20programming&limit=10&sort=relevance"
+
+GET https://api.example.com/search?q=rust%20programming&limit=10&sort=relevance
+
+###
+
+## Docker Hub API Examples
+
+### Get Repository Tags
+# Original cURL:
+# curl https://hub.docker.com/v2/repositories/library/nginx/tags/
+
+GET https://hub.docker.com/v2/repositories/library/nginx/tags/
+
+###
+
+## NPM Registry API
+
+### Get Package Info
+# Original cURL:
+# curl https://registry.npmjs.org/react
+
+GET https://registry.npmjs.org/react
+
+###
+
+## Usage Instructions
+
+### How to Import cURL Commands:
+# 1. Copy a cURL command from documentation or DevTools
+# 2. Use the "Paste cURL" command in Zed
+# 3. The extension will automatically convert it to HTTP request format
+# 4. Edit and send the request as needed
+
+### How to Export Requests as cURL:
+# 1. Place cursor in an HTTP request block
+# 2. Use the "Copy as cURL" command
+# 3. The cURL command is copied to clipboard
+# 4. Paste in terminal or share with others
+
+### Supported cURL Flags:
+# - `-X, --request` - HTTP method
+# - `-H, --header` - Headers
+# - `-d, --data, --data-raw, --data-binary` - Request body
+# - `-u, --user` - Basic authentication
+# - `--compressed` - Ignored (doesn't affect request)
+# - `-k, --insecure` - Ignored (doesn't affect request)
+# - `-L, --location` - Ignored (doesn't affect request)
+# - `-s, --silent` - Ignored (output option)
+# - `-v, --verbose` - Ignored (output option)
+
+### Notes:
+# - Multiple `-d` flags are concatenated with `&`
+# - `-u username:password` is converted to Authorization header
+# - JSON bodies automatically get `Content-Type: application/json`
+# - Single and double quotes are handled correctly
+# - Line continuations with backslash are supported
+
+###
+
+## Testing cURL Conversion
+
+### Test 1: Simple GET
+# curl https://httpbin.org/get
+GET https://httpbin.org/get
+
+###
+
+### Test 2: POST with JSON
+# curl -X POST https://httpbin.org/post -H "Content-Type: application/json" -d '{"test":true}'
+POST https://httpbin.org/post
+Content-Type: application/json
+
+{"test":true}
+
+###
+
+### Test 3: Multiple Headers
+# curl -H "Accept: application/json" -H "User-Agent: REST-Client/1.0" https://httpbin.org/headers
+GET https://httpbin.org/headers
+Accept: application/json
+User-Agent: REST-Client/1.0
+
+###
+
+### Test 4: Auth + Body
+# curl -u admin:secret -d '{"action":"deploy"}' https://httpbin.org/post
+POST https://httpbin.org/post
+Authorization: Basic YWRtaW46c2VjcmV0
+Content-Type: application/json
+
+{"action":"deploy"}
+
+###

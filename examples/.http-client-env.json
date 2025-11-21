@@ -1,0 +1,29 @@
+{
+  "$shared": {
+    "contentType": "application/json",
+    "userAgent": "REST-Client/1.0",
+    "apiVersion": "v1"
+  },
+  "dev": {
+    "baseUrl": "http://localhost:3000",
+    "apiKey": "dev-api-key-12345",
+    "timeout": "30",
+    "database": "dev_db",
+    "debugMode": "true"
+  },
+  "staging": {
+    "baseUrl": "https://staging.api.example.com",
+    "apiKey": "staging-api-key-67890",
+    "timeout": "60",
+    "database": "staging_db",
+    "debugMode": "false"
+  },
+  "production": {
+    "baseUrl": "https://api.example.com",
+    "apiKey": "{{$processEnv PROD_API_KEY}}",
+    "timeout": "120",
+    "database": "prod_db",
+    "debugMode": "false"
+  },
+  "active": "dev"
+}

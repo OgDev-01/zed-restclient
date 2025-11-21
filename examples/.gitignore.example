@@ -1,0 +1,92 @@
+# Example .gitignore for REST Client HTTP files
+# Copy relevant sections to your project's .gitignore
+
+# ============================================================================
+# ENVIRONMENT FILES - SECURITY BEST PRACTICES
+# ============================================================================
+
+# Always ignore .env files (they may contain secrets)
+.env
+.env.local
+.env.*.local
+
+# Ignore local environment file overrides
+# (Use these for personal/local configurations)
+.http-client-env.local.json
+http-client.env.local.json
+
+# ============================================================================
+# RECOMMENDED APPROACH
+# ============================================================================
+#
+# 1. COMMIT the base environment file with safe defaults:
+#    .http-client-env.json (with $processEnv for secrets)
+#
+# 2. IGNORE local overrides for personal configurations:
+#    .http-client-env.local.json
+#
+# 3. DOCUMENT required environment variables in README
+#
+# Example structure:
+#
+# .http-client-env.json (COMMIT this):
+# {
+#   "$shared": { "apiVersion": "v1" },
+#   "dev": {
+#     "baseUrl": "http://localhost:3000",
+#     "apiKey": "dev-key-safe-to-commit"
+#   },
+#   "production": {
+#     "baseUrl": "https://api.example.com",
+#     "apiKey": "{{$processEnv PROD_API_KEY}}"
+#   }
+# }
+#
+# .http-client-env.local.json (IGNORE this):
+# {
+#   "dev": {
+#     "apiKey": "my-personal-dev-key-override"
+#   }
+# }
+
+# ============================================================================
+# HTTP REQUEST FILES
+# ============================================================================
+
+# If you have sensitive requests with hardcoded data, ignore them
+# (Better: use variables instead of hardcoding)
+*.private.http
+*.secret.http
+*-local.http
+
+# ============================================================================
+# RESPONSE/HISTORY FILES (if you implement caching)
+# ============================================================================
+
+# Ignore cached responses (may contain sensitive data)
+.rest-client-cache/
+.http-client-history/
+
+# ============================================================================
+# BEST PRACTICES SUMMARY
+# ============================================================================
+#
+# ✅ DO:
+# - Commit .http files with variables: {{apiKey}}, {{baseUrl}}
+# - Commit environment files that use {{$processEnv}} for secrets
+# - Use .env files for local development secrets (and ignore them)
+# - Document required environment variables in README
+#
+# ❌ DON'T:
+# - Commit .env files (they contain secrets)
+# - Hardcode API keys, tokens, or passwords in .http files
+# - Commit environment files with production secrets
+# - Share personal API keys or credentials
+#
+# 🔒 SECURITY:
+# - Use {{$processEnv VARIABLE}} for production secrets
+# - Use {{$dotenv VARIABLE}} for development secrets
+# - Keep .env files in .gitignore
+# - Rotate any secrets that were accidentally committed
+#
+# ============================================================================

@@ -8,9 +8,17 @@ pub mod error;
 
 use crate::models::{HttpMethod, HttpRequest};
 use error::ParseError;
+use once_cell::sync::Lazy;
 use regex::Regex;
 use std::collections::HashMap;
 use std::path::PathBuf;
+
+/// Cached regex pattern for parsing request lines (METHOD URL [HTTP/VERSION]).
+/// This is compiled once and reused to avoid repeated regex compilation overhead.
+static REQUEST_LINE_REGEX: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r"^([A-Z]+)\s+(\S+)(?:\s+(HTTP/\d+(?:\.\d+)?))?$")
+        .expect("Failed to compile request line regex")
+});
 
 /// Parses the content of an HTTP request file into a vector of requests.
 ///
@@ -34,22 +42,15 @@ use std::path::PathBuf;
 /// use rest_client::parser::parse_file;
 /// use std::path::PathBuf;
 ///
-/// let content = r#"
-/// GET https://api.example.com/users
-///
-/// ###
-///
-/// POST https://api.example.com/users
-/// Content-Type: application/json
-///
-/// {"name": "John"}
-/// "#;
+/// let content = "GET https://api.example.com/users\n\n###\n\nPOST https://api.example.com/users\nContent-Type: application/json\n\n{\"name\": \"John\"}";
 ///
 /// let requests = parse_file(content, &PathBuf::from("test.http")).unwrap();
 /// assert_eq!(requests.len(), 2);
 /// ```
 pub fn parse_file(content: &str, file_path: &PathBuf) -> Result<Vec<HttpRequest>, ParseError> {
-    let mut requests = Vec::new();
+    // Pre-allocate with estimated capacity for better performance
+    let estimated_requests = content.matches("###").count().max(1);
+    let mut requests = Vec::with_capacity(estimated_requests);
     let mut current_block = Vec::new();
     let mut block_start_line = 1;
     let mut current_line = 1;
@@ -198,13 +199,10 @@ pub fn parse_request_line(
     line: &str,
     line_num: usize,
 ) -> Result<(HttpMethod, String, Option<String>), ParseError> {
-    // Regex to match: METHOD URL [HTTP/VERSION]
-    // This handles both simple and full RFC 2616 format
-    let re = Regex::new(r"^([A-Z]+)\s+(\S+)(?:\s+(HTTP/\d+(?:\.\d+)?))?$").unwrap();
-
     let trimmed = line.trim();
 
-    if let Some(captures) = re.captures(trimmed) {
+    // Use cached regex to avoid repeated compilations (performance optimization)
+    if let Some(captures) = REQUEST_LINE_REGEX.captures(trimmed) {
         // Extract method
         let method_str = captures.get(1).unwrap().as_str();
         let method = HttpMethod::from_str(method_str).ok_or(ParseError::InvalidMethod {
@@ -318,7 +316,16 @@ pub fn extract_body(lines: &[&str]) -> Option<String> {
         return None;
     }
 
-    let body = lines.join("\n");
+    // Pre-calculate total capacity to avoid multiple allocations
+    let total_len: usize = lines.iter().map(|line| line.len() + 1).sum();
+    let mut body = String::with_capacity(total_len);
+
+    for (i, line) in lines.iter().enumerate() {
+        if i > 0 {
+            body.push('\n');
+        }
+        body.push_str(line);
+    }
     let trimmed = body.trim();
 
     if trimmed.is_empty() {

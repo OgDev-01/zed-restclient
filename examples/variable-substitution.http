@@ -1,0 +1,154 @@
+### Variable Substitution Examples for REST Client
+
+# This file demonstrates the variable substitution engine
+# Variables are defined in various contexts and can be nested
+
+###
+
+# 1. SIMPLE FILE VARIABLES
+# Define variables at the file level (for testing purposes)
+# Note: In production, use environment files for better organization
+
+# Example with simple text replacement
+GET https://httpbin.org/get?name={{username}}&id={{userId}}
+# Variables: username=JohnDoe, userId=12345
+
+###
+
+# 2. SYSTEM VARIABLES - Dynamic values
+# System variables start with $ and are resolved at runtime
+
+# Generate unique request ID
+POST https://httpbin.org/post
+Content-Type: application/json
+X-Request-ID: {{$guid}}
+
+{
+  "requestId": "{{$guid}}",
+  "timestamp": {{$timestamp}},
+  "createdAt": "{{$datetime iso8601}}"
+}
+
+###
+
+# 3. TIMESTAMP WITH OFFSETS
+# Calculate timestamps relative to current time
+
+# Get data from 1 day ago
+GET https://httpbin.org/get?since={{$timestamp -1 d}}
+
+# Schedule for 2 hours from now
+POST https://httpbin.org/post
+Content-Type: application/json
+
+{
+  "scheduledAt": {{$timestamp +2 h}},
+  "expiresAt": {{$timestamp +7 d}}
+}
+
+###
+
+# 4. DATETIME FORMATTING
+# Format dates in RFC1123 or ISO8601
+
+GET https://httpbin.org/headers
+If-Modified-Since: {{$datetime rfc1123 -1 d}}
+
+POST https://httpbin.org/post
+Content-Type: application/json
+
+{
+  "eventTime": "{{$datetime iso8601}}",
+  "reportDate": "{{$datetime iso8601 -30 d}}"
+}
+
+###
+
+# 5. RANDOM VALUES
+# Generate random integers for testing
+
+POST https://httpbin.org/post
+Content-Type: application/json
+
+{
+  "priority": {{$randomInt 1 5}},
+  "userId": {{$randomInt 1000 9999}},
+  "retryDelay": {{$randomInt 100 1000}}
+}
+
+###
+
+# 6. ENVIRONMENT VARIABLES FROM PROCESS
+# Access system environment variables
+
+# Required variable (will error if not set)
+GET https://httpbin.org/bearer
+Authorization: Bearer {{$processEnv API_TOKEN}}
+
+# Optional variable (returns empty string if not set)
+GET https://httpbin.org/get
+X-Debug-Mode: {{$processEnv %DEBUG_ENABLED}}
+
+###
+
+# 7. DOTENV FILE VARIABLES
+# Read from .env file in workspace
+
+POST https://httpbin.org/post
+Content-Type: application/json
+Authorization: Bearer {{$dotenv AUTH_TOKEN}}
+
+{
+  "apiKey": "{{$dotenv API_KEY}}",
+  "environment": "{{$dotenv ENVIRONMENT}}"
+}
+
+###
+
+# 8. NESTED VARIABLE RESOLUTION
+# Variables can reference other variables
+
+# Assuming these variables are defined in environment:
+# - env = "production"
+# - production_url = "https://api.prod.com"
+# - staging_url = "https://api.staging.com"
+
+GET {{baseUrl}}/users
+Authorization: Bearer {{authToken}}
+
+# The baseUrl might be defined as {{production_url}} in environment
+# This creates a chain of variable resolution
+
+###
+
+# 9. ESCAPED BRACES
+# Use backslash to escape braces and prevent substitution
+
+POST https://httpbin.org/post
+Content-Type: application/json
+
+{
+  "message": "Variables use \{{variableName\}} syntax",
+  "actualVariable": "{{$guid}}",
+  "example": "The syntax is \{{ and \}}"
+}
+
+###
+
+# 10. VARIABLES IN DIFFERENT REQUEST PARTS
+# Variables work in URLs, headers, and bodies
+
+# In URL path and query params
+GET https://{{host}}/api/v{{version}}/users/{{userId}}?filter={{filterType}}
+
+# In headers
+Authorization: Bearer {{accessToken}}
+X-API-Key: {{apiKey}}
+Accept: {{acceptType}}
+
+# In request body
+Content-Type: application/json
+
+{
+  "username": "{{username}}",
+  "email": "{{email}}",

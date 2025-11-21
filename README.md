@@ -1,17 +1,36 @@
 # REST Client for Zed
 
-A powerful HTTP client extension for the Zed editor that allows you to send HTTP requests and view responses directly within your editor. Inspired by the popular VS Code REST Client extension.
+A powerful HTTP client extension for Zed that brings professional API testing directly into your editor. Send HTTP requests, view formatted responses, manage environments, and chain requests—all without leaving your development workflow.
 
-## Features
+**Inspired by the popular VS Code REST Client extension.**
 
-- 📝 Send HTTP requests from `.http` and `.rest` files
-- 🎨 Syntax highlighting for HTTP request files
-- 📊 View formatted responses with JSON/XML pretty-printing
-- 🔄 Support for all HTTP methods (GET, POST, PUT, DELETE, PATCH, etc.)
-- 📦 Variable substitution and environment support (coming soon)
-- 📜 Request history tracking (coming soon)
-- 🔐 Authentication support (Basic, Bearer, etc.) (coming soon)
-- 🌐 GraphQL support (coming soon)
+## ✨ Key Features
+
+- **🚀 Full HTTP Support** - All HTTP methods (GET, POST, PUT, DELETE, PATCH, OPTIONS, HEAD)
+- **📝 Simple Syntax** - Write requests in plain text `.http` or `.rest` files
+- **🎨 Beautiful Responses** - Auto-formatted JSON, XML, and HTML with syntax highlighting
+- **🔄 Request Chaining** - Capture response values and use in subsequent requests (JSONPath)
+- **🌍 Environment Management** - Switch between dev, staging, and production with one command
+- **📦 Powerful Variables** - System variables (`{{$guid}}`, `{{$timestamp}}`), environment vars, and custom variables
+- **🔐 Secure Secrets** - Use environment variables to keep API keys out of version control
+- **⚡ Code Generation** - Generate JavaScript, Python code from your requests
+- **🌐 GraphQL Ready** - Full GraphQL query and mutation support
+- **🔧 cURL Integration** - Import cURL commands, export requests as cURL
+- **💡 Smart Editor** - Auto-complete, hover hints, real-time diagnostics via LSP
+- **📜 History Tracking** - Automatic request/response history
+
+## 📖 Table of Contents
+
+- [Installation](#installation)
+- [Quick Start](#quick-start)
+- [Basic Usage](#basic-usage)
+- [Documentation](#documentation)
+- [Configuration](#configuration)
+- [Examples](#examples)
+- [Keyboard Shortcuts](#keyboard-shortcuts)
+- [Troubleshooting](#troubleshooting)
+- [Migration from VS Code](#migration-from-vs-code)
+- [Contributing](#contributing)
 
 ## Installation
 
@@ -33,14 +52,261 @@ A powerful HTTP client extension for the Zed editor that allows you to send HTTP
    ```
 4. Install the extension in Zed by copying it to your extensions directory
 
-## Usage
+See [Installation Guide](docs/INSTALL_DEV.md) for detailed build instructions and development setup.
 
-### Creating an HTTP Request File
+## 🚀 Quick Start
 
-1. Create a new file with `.http` or `.rest` extension
-2. Write your HTTP request following the format below
+### 1. Create an HTTP File
 
-### Basic Request Format
+Create a file named `api-test.http`:
+
+```http
+### Get GitHub user
+GET https://api.github.com/users/octocat
+
+### Create a post
+POST https://jsonplaceholder.typicode.com/posts
+Content-Type: application/json
+
+{
+  "title": "My Post",
+  "body": "This is the content",
+  "userId": 1
+}
+```
+
+### 2. Send a Request
+
+1. Click the **"Send Request"** button that appears above each request
+2. Or use the command palette: `Cmd+Shift+P` → "rest-client: send request"
+3. View the formatted response in a split pane
+
+### 3. Use Variables
+
+Create `.http-client-env.json` in your workspace root:
+
+```json
+{
+  "development": {
+    "baseUrl": "http://localhost:3000",
+    "apiKey": "dev-key-123"
+  },
+  "production": {
+    "baseUrl": "https://api.example.com",
+    "apiKey": "{{$processEnv PROD_API_KEY}}"
+  }
+}
+```
+
+Use in your requests:
+
+```http
+GET {{baseUrl}}/users
+Authorization: Bearer {{apiKey}}
+```
+
+Switch environments:
+```
+/switch-environment production
+```
+
+**👉 New to the extension?** Check out the [Getting Started Guide](docs/GETTING_STARTED.md) for a complete walkthrough.
+
+## 📚 Basic Usage
+
+## Configuration
+
+The REST Client extension can be customized through Zed settings. Add configuration to your `settings.json`:
+
+```json
+{
+  "rest-client": {
+    "timeout": 30000,
+    "validateSsl": true,
+    "historyLimit": 1000,
+    "responsePane": "right",
+    "defaultHeaders": {
+      "User-Agent": "Zed-REST-Client/1.0"
+    }
+  }
+}
+```
+
+### Simple Request Format
+
+**Minimal GET request:**
+```http
+GET https://api.example.com/users
+```
+
+Or even simpler (GET is assumed):
+```http
+https://api.example.com/users
+```
+
+**POST with JSON:**
+```http
+POST https://api.example.com/users
+Content-Type: application/json
+
+{
+  "name": "John Doe",
+  "email": "john@example.com"
+}
+```
+
+**With headers:**
+```http
+GET https://api.example.com/data
+Accept: application/json
+Authorization: Bearer YOUR_TOKEN
+User-Agent: MyApp/1.0
+```
+
+**Multiple requests in one file:**
+```http
+### Get all users
+GET https://api.example.com/users
+
+### Create a user
+POST https://api.example.com/users
+Content-Type: application/json
+
+{
+  "name": "Jane Doe"
+}
+
+### Get specific user
+GET https://api.example.com/users/123
+```
+
+Use `###` to separate requests.
+
+### Variables and Environments
+
+**File variables:**
+```http
+@baseUrl = https://api.example.com
+@apiVersion = v1
+
+GET {{baseUrl}}/{{apiVersion}}/users
+```
+
+**System variables:**
+```http
+POST {{baseUrl}}/events
+Content-Type: application/json
+
+{
+  "id": "{{$guid}}",
+  "timestamp": {{$timestamp}},
+  "datetime": "{{$datetime iso8601}}"
+}
+```
+
+**Environment files** (`.http-client-env.json`):
+```json
+{
+  "development": {
+    "baseUrl": "http://localhost:3000"
+  },
+  "production": {
+    "baseUrl": "https://api.example.com"
+  }
+}
+```
+
+Switch with: `/switch-environment production`
+
+### Request Chaining
+
+Capture values from responses:
+
+```http
+### Login
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "user@example.com",
+  "password": "secret"
+}
+
+# @capture authToken = $.token
+
+### Use the token
+GET {{baseUrl}}/protected
+Authorization: Bearer {{authToken}}
+```
+
+## 📖 Documentation
+
+### Core Guides
+
+| Guide | Description |
+|-------|-------------|
+| **[Getting Started](docs/GETTING_STARTED.md)** | Complete beginner's guide with examples |
+| **[Features](docs/FEATURES.md)** | Detailed explanation of all features |
+| **[Migration Guide](docs/MIGRATION.md)** | Moving from VS Code REST Client |
+| **[Troubleshooting](docs/TROUBLESHOOTING.md)** | Common issues and solutions |
+
+### Feature Documentation
+
+| Topic | Description |
+|-------|-------------|
+| **[Configuration](docs/CONFIGURATION.md)** | All settings, defaults, and validation |
+| **[Variables](docs/VARIABLES.md)** | Variable types, syntax, and usage |
+| **[Environments](docs/ENVIRONMENTS.md)** | Environment management and switching |
+| **[Request Chaining](docs/REQUEST_VARIABLES.md)** | JSONPath, response capture, workflows |
+| **[GraphQL](docs/GRAPHQL.md)** | GraphQL queries and mutations |
+| **[Code Generation](docs/CODE_GENERATION.md)** | Generate code in multiple languages |
+| **[cURL Commands](docs/CURL_COMMANDS_USAGE.md)** | Import/export cURL |
+| **[LSP Features](docs/LSP_FEATURES.md)** | Auto-complete, diagnostics, hover |
+
+### Examples
+
+All examples are in the [`examples/`](examples/) directory:
+
+- `basic-requests.http` - Simple GET/POST/PUT/DELETE
+- `with-variables.http` - All variable types
+- `request-chaining.http` - Response capture and chaining
+- `graphql-examples.http` - GraphQL queries
+- `.http-client-env.json` - Multi-environment setup
+
+## ⚙️ Configuration
+
+Add to your Zed `settings.json`:
+
+```json
+{
+  "rest-client": {
+    "timeout": 30000,
+    "followRedirects": true,
+    "validateSSL": true,
+    "historyLimit": 1000,
+    "responsePane": "right",
+    "defaultHeaders": {
+      "User-Agent": "Zed-REST-Client/1.0"
+    }
+  }
+}
+```
+
+### Common Settings
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `timeout` | 30000 | Request timeout (milliseconds) |
+| `validateSSL` | true | Validate SSL/TLS certificates |
+| `followRedirects` | true | Follow HTTP redirects |
+| `maxRedirects` | 5 | Maximum redirect hops |
+| `historyLimit` | 1000 | Max requests in history |
+| `responsePane` | "right" | Response position: "right", "below", "tab" |
+| `defaultHeaders` | {} | Headers added to all requests |
+
+**📘 See [Configuration Guide](docs/CONFIGURATION.md) for all settings and examples.**
+
+## 📝 Examples
 
 #### Simple GET Request
 
@@ -151,68 +417,62 @@ Content-Type: application/json
 
 ## Examples
 
-### REST API Testing
+Check the [`examples/`](examples/) directory for complete working examples:
 
 ```http
-### List all users
-GET https://jsonplaceholder.typicode.com/users
+### Simple GET
+GET https://api.github.com/users/octocat
 
-### Get specific user
-GET https://jsonplaceholder.typicode.com/users/1
-
-### Create user
-POST https://jsonplaceholder.typicode.com/users
+### POST with JSON
+POST https://jsonplaceholder.typicode.com/posts
 Content-Type: application/json
 
 {
-  "name": "John Doe",
-  "email": "john@example.com"
+  "title": "My Post",
+  "body": "Content here",
+  "userId": 1
 }
 
-### Update user
-PUT https://jsonplaceholder.typicode.com/users/1
-Content-Type: application/json
+### With authentication
+GET https://api.example.com/protected
+Authorization: Bearer {{token}}
 
-{
-  "name": "Jane Doe",
-  "email": "jane@example.com"
-}
-
-### Delete user
-DELETE https://jsonplaceholder.typicode.com/users/1
-```
-
-### Testing with Custom Headers
-
-```http
-### Request with custom headers
-GET https://httpbin.org/headers
-User-Agent: REST-Client-Zed/1.0
-X-Custom-Header: custom-value
-Accept: application/json
-```
-
-### Form Data
-
-```http
+### Form data
 POST https://httpbin.org/post
 Content-Type: application/x-www-form-urlencoded
 
-username=johndoe&password=secret123
+username=johndoe&password=secret
 ```
 
-## Keyboard Shortcuts
+**More examples:**
+- [Basic Requests](examples/basic-requests.http)
+- [Variables](examples/with-variables.http)
+- [Request Chaining](examples/request-chaining.http)
+- [GraphQL](examples/graphql-examples.http)
 
-Currently, there are no default keyboard shortcuts. You can add custom shortcuts in Zed's keymap settings:
+## ⌨️ Keyboard Shortcuts
+
+Add custom shortcuts to your Zed `keymap.json`:
 
 ```json
 {
   "context": "Editor && (extension == 'http' || extension == 'rest')",
   "bindings": {
-    "ctrl-alt-r": "rest-client: send request"
+    "ctrl-alt-r": "rest-client: send request",
+    "ctrl-alt-e": "rest-client: switch environment",
+    "ctrl-alt-g": "rest-client: generate code"
   }
 }
 ```
+
+**Available Commands:**
+- `rest-client: send request` - Execute the current request
+- `rest-client: switch environment` - Change active environment
+- `rest-client: generate code` - Generate code from request
+- `rest-client: copy as cURL` - Export as cURL command
+- `rest-client: paste cURL` - Import cURL command
+- `rest-client: save response` - Save response to file
+- `rest-client: copy response` - Copy response to clipboard
 
 ## Troubleshooting
 
@@ -235,20 +495,62 @@ Currently, there are no default keyboard shortcuts. You can add custom shortcuts
 2. Reload Zed or restart the editor
 3. Check if the language mode is set to "HTTP" in the status bar
 
-## Roadmap
+## 🔧 Troubleshooting
 
-- [x] Basic HTTP request execution
-- [x] Syntax highlighting for .http files
-- [x] Response formatting (JSON, XML, HTML)
-- [ ] Variable substitution (`{{variable}}`)
-- [ ] Environment files support
-- [ ] Request history
-- [ ] Authentication helpers (Basic, Bearer, Digest)
-- [ ] GraphQL support
-- [ ] Code generation (cURL, JavaScript, Python, etc.)
-- [ ] Advanced Tree-sitter grammar
-- [ ] Response time graphs
-- [ ] Certificate management
+### Common Issues
+
+**Request not sending?**
+- Ensure URL includes `http://` or `https://`
+- Check for syntax errors (red squiggly lines)
+- Verify cursor is within the request block
+
+**Variables not resolving?**
+- Check variable names match exactly (case-sensitive)
+- Ensure environment file exists and is valid JSON
+- Use `/switch-environment` to verify active environment
+
+**SSL errors?**
+```json
+{
+  "rest-client": {
+    "validateSSL": false  // For development only!
+  }
+}
+```
+
+**📘 See [Troubleshooting Guide](docs/TROUBLESHOOTING.md) for detailed solutions.**
+
+## 🔄 Migration from VS Code
+
+Migrating from VS Code REST Client? Your files will work as-is!
+
+- ✅ Same `.http` file format
+- ✅ Same variable syntax `{{var}}`
+- ✅ Same environment file format
+- ✅ Same request separator `###`
+- ✅ Same system variables
+
+**📘 See [Migration Guide](docs/MIGRATION.md) for complete details and settings mapping.**
+
+## 🎯 Roadmap
+
+**Completed:**
+- ✅ Full HTTP method support
+- ✅ Syntax highlighting (Tree-sitter)
+- ✅ Response formatting (JSON, XML, HTML)
+- ✅ Variable substitution and environments
+- ✅ Request chaining with JSONPath
+- ✅ GraphQL support
+- ✅ Code generation (JavaScript, Python)
+- ✅ cURL import/export
+- ✅ LSP features (autocomplete, diagnostics)
+- ✅ Configuration system
+
+**Coming Soon:**
+- ⏳ Request history UI
+- ⏳ More code generation languages
+- ⏳ Response time graphs
+- ⏳ Certificate management
 
 ## Contributing
 
@@ -297,13 +599,22 @@ at your option.
 - Built for [Zed](https://zed.dev/) editor
 - Thanks to all contributors and the Zed community
 
-## Support
+## 📞 Support & Community
 
-For issues, questions, or suggestions:
-- Open an issue on GitHub
-- Check existing issues for similar problems
-- Consult the Zed documentation for extension-related questions
+**Need help?**
+- 📖 Check the [Documentation](docs/)
+- 🐛 [Report bugs](https://github.com/yourusername/repo/issues)
+- 💬 [Ask questions](https://github.com/yourusername/repo/discussions)
+- 📝 Review [Examples](examples/)
+
+**Found a bug?** Please include:
+- Zed version
+- Extension version
+- Minimal `.http` file that reproduces the issue
+- Error messages from logs
 
 ---
 
 **Happy API Testing! 🚀**
+
+*Built with ❤️ for the Zed community*

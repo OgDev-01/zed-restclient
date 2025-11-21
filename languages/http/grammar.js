@@ -1,16 +1,26 @@
 /**
  * Tree-sitter Grammar for HTTP Request Files (.http, .rest)
  *
- * This is a minimal grammar for basic syntax highlighting.
- * Full grammar implementation will be added in Phase 4.
+ * Comprehensive grammar for parsing HTTP request files with support for:
+ * - HTTP methods (GET, POST, PUT, DELETE, etc.)
+ * - URLs with variables
+ * - HTTP versions
+ * - Headers with multi-line values
+ * - Request bodies (JSON, XML, GraphQL, etc.)
+ * - Variables {{variable}}
+ * - Comments (# and //)
+ * - Request separators (###)
  */
 
 module.exports = grammar({
   name: 'http',
 
   extras: $ => [
-    /\s/,
-    $.comment,
+    /[ \t]/,
+  ],
+
+  conflicts: $ => [
+    [$.request],
   ],
 
   rules: {
@@ -19,23 +29,39 @@ module.exports = grammar({
         $.request,
         $.comment,
         $.request_separator,
+        $.blank_line,
       )
     ),
 
-    request_separator: $ => /###.*/,
+    blank_line: $ => /\r?\n/,
 
+    // Request separator: ###
+    request_separator: $ => seq(
+      '###',
+      optional(/[^\r\n]*/),
+      /\r?\n/,
+    ),
+
+    // Complete HTTP request
     request: $ => seq(
       $.method_line,
       optional($.headers),
       optional($.body),
     ),
 
+    // Method line: METHOD URL [HTTP/VERSION]
     method_line: $ => seq(
       field('method', $.method),
-      field('url', $.url),
-      optional(field('version', $.http_version)),
+      /[ \t]+/,
+      field('url', $.target),
+      optional(seq(
+        /[ \t]+/,
+        field('version', $.http_version),
+      )),
+      /\r?\n/,
     ),
 
+    // HTTP methods
     method: $ => choice(
       'GET',
       'POST',
@@ -48,59 +74,64 @@ module.exports = grammar({
       'CONNECT',
     ),
 
-    url: $ => /https?:\/\/[^\s]+/,
+    // Target URL (with or without variables)
+    target: $ => /[^\s\r\n]+/,
 
-    http_version: $ => /HTTP\/[0-9.]+/,
+    // HTTP version (e.g., HTTP/1.1, HTTP/2)
+    http_version: $ => /HTTP\/[0-9]+(\.[0-9]+)?/,
 
+    // Headers section - at least one header
     headers: $ => repeat1($.header),
 
+    // Single header: Name: Value
     header: $ => seq(
       field('name', $.header_name),
       ':',
-      field('value', $.header_value),
+      optional(seq(
+        optional(/[ \t]+/),
+        field('value', $.header_value),
+      )),
+      /\r?\n/,
     ),
 
     header_name: $ => /[A-Za-z][\w-]*/,
 
     header_value: $ => /[^\r\n]+/,
 
+    // Request body - starts with blank line, content must not start with ###
     body: $ => seq(
-      /\n/,
+      /\r?\n/,
       field('content', $.body_content),
     ),
 
-    body_content: $ => /[^#]([^#]|#[^#]|##[^#])*/,
+    // Body content - at least one line that doesn't start with ###
+    body_content: $ => prec.right(repeat1(
+      choice(
+        // Non-empty line that doesn't start with #
+        seq(/[^\r\n#]+/, /\r?\n/),
+        // Single # (comment in body)
+        seq('#', token.immediate(/[^#\r\n]/), /[^\r\n]*/, /\r?\n/),
+        // Double ## (but not ###)
+        seq('##', token.immediate(/[^#\r\n]/), /[^\r\n]*/, /\r?\n/),
+        // Blank line (but stop at EOF or ###)
+        /\r?\n/,
+      )
+    )),
 
-    variable: $ => /\{\{[^}]+\}\}/,
-
-    comment: $ => choice(
-      seq('#', /.*/),
-      seq('//', /.*/),
-      seq('/*', /[^*]*\*+([^/*][^*]*\*+)*/, '/'),
+    // Variable: {{variableName}} or {{$systemVar}}
+    variable: $ => seq(
+      '{{',
+      field('name', $.variable_name),
+      '}}',
     ),
 
-    // Tokens for syntax highlighting
-    string: $ => choice(
-      seq('"', /[^"]*/, '"'),
-      seq("'", /[^']*/, "'"),
-      $.url,
-      $.header_value,
-    ),
+    variable_name: $ => /[^}]+/,
 
-    number: $ => /\d+/,
-
-    boolean: $ => choice('true', 'false'),
-
-    null: $ => 'null',
-
-    identifier: $ => /[a-zA-Z_][a-zA-Z0-9_]*/,
-
-    property: $ => seq($.header_name, ':'),
-
-    operator: $ => choice(
-      '###',
-      '=',
-      ':',
+    // Comments: # or //
+    comment: $ => seq(
+      choice('#', '//'),
+      /[^\r\n]*/,
+      /\r?\n/,
     ),
   }
 });

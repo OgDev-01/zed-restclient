@@ -1,0 +1,490 @@
+//! Request chaining and workflow integration tests
+//!
+//! These tests verify request chaining, variable capture, environment switching,
+//! and history management workflows.
+
+use rest_client::environment::{Environment, EnvironmentSession, Environments};
+use rest_client::executor::{execute_request, ExecutionConfig};
+use rest_client::history::HistoryEntry;
+use rest_client::models::{HttpMethod, HttpRequest};
+use rest_client::parser::parse_file;
+use rest_client::variables::substitute_variables;
+use serde_json::json;
+use std::collections::HashMap;
+use std::fs;
+use std::path::PathBuf;
+use tempfile::TempDir;
+use wiremock::matchers::{method, path};
+use wiremock::{Mock, MockServer, ResponseTemplate};
+
+/// Helper to create a temporary .http file
+fn create_temp_http_file(dir: &TempDir, name: &str, content: &str) -> PathBuf {
+    let file_path = dir.path().join(name);
+    fs::write(&file_path, content).expect("Failed to write test file");
+    file_path
+}
+
+/// Helper to create environment config file
+fn create_env_config(dir: &TempDir, config: &Environments) -> PathBuf {
+    let config_path = dir.path().join(".http-client-env.json");
+    let json = serde_json::to_string_pretty(config).expect("Failed to serialize config");
+    fs::write(&config_path, json).expect("Failed to write config");
+    config_path
+}
+
+#[tokio::test]
+async fn test_request_chaining_capture_and_use_variable() {
+    let mock_server = MockServer::start().await;
+
+    // First request returns a token
+    Mock::given(method("POST"))
+        .and(path("/auth/login"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "token": "secret-auth-token-xyz",
+            "user_id": "user-123",
+            "expires_in": 3600
+        })))
+        .mount(&mock_server)
+        .await;
+
+    // Second request uses the token
+    Mock::given(method("GET"))
+        .and(path("/api/profile"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "id": "user-123",
+            "name": "Test User",
+            "email": "test@example.com"
+        })))
+        .mount(&mock_server)
+        .await;
+
+    let temp_dir = TempDir::new().unwrap();
+
+    // Create .http file with variable capture
+    let http_content = format!(
+        r#"# @name login
+POST {}/auth/login
+Content-Type: application/json
+
+{{"username": "test", "password": "pass"}}
+
+###
+
+# Use captured token from previous request
+GET {}/api/profile
+Authorization: Bearer {{{{login.response.body.token}}}}
+"#,
+        mock_server.uri(),
+        mock_server.uri()
+    );
+
+    let file_path = create_temp_http_file(&temp_dir, "chained.http", &http_content);
+    let requests = parse_file(&http_content, &file_path).unwrap();
+
+    assert_eq!(requests.len(), 2, "Should parse two requests");
+
+    let config = ExecutionConfig::default();
+
+    // Execute first request (login)
+    let login_response = execute_request(&requests[0], &config).unwrap();
+    assert_eq!(login_response.status_code, 200);
+    assert!(login_response.body_as_string().unwrap().contains("secret-auth-token-xyz"));
+
+    // Parse response to extract token
+    let response_json: serde_json::Value =
+        serde_json::from_str(&login_response.body).expect("Failed to parse JSON response");
+    let token = response_json["token"]
+        .as_str()
+        .expect("Token not found in response");
+
+    // Resolve variables in second request
+    let mut second_request = requests[1].clone();
+    if let Some(auth_header) = second_request.headers.get("Authorization") {
+        if auth_header.contains("{{") {
+            // Resolve variable
+            let resolved = auth_header.replace("{{login.response.body.token}}", token);
+            second_request
+                .headers
+                .insert("Authorization".to_string(), resolved);
+        }
+    }
+
+    // Execute second request with resolved token
+    let profile_response = execute_request(&second_request, &config).unwrap();
+    assert_eq!(profile_response.status_code, 200);
+    assert!(profile_response.body_as_string().unwrap().contains("Test User"));
+}
+
+#[tokio::test]
+async fn test_environment_switching_workflow() {
+    let mock_dev = MockServer::start().await;
+    let mock_prod = MockServer::start().await;
+
+    // Setup dev environment endpoint
+    Mock::given(method("GET"))
+        .and(path("/api/status"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "environment": "development",
+            "status": "ok"
+        })))
+        .mount(&mock_dev)
+        .await;
+
+    // Setup prod environment endpoint
+    Mock::given(method("GET"))
+        .and(path("/api/status"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "environment": "production",
+            "status": "ok"
+        })))
+        .mount(&mock_prod)
+        .await;
+
+    let temp_dir = TempDir::new().unwrap();
+
+    // Create environment configuration
+    let mut environments = Environments::new();
+
+    let mut dev = Environment::new("development");
+    dev.set("baseUrl", mock_dev.uri());
+    dev.set("apiKey", "dev-api-key");
+    environments.add_environment(dev);
+
+    let mut prod = Environment::new("production");
+    prod.set("baseUrl", mock_prod.uri());
+    prod.set("apiKey", "prod-api-key");
+    environments.add_environment(prod);
+
+    create_env_config(&temp_dir, &environments);
+
+    // Create .http file using environment variables
+    let http_content = "GET {{baseUrl}}/api/status\nX-API-Key: {{apiKey}}\n";
+    let file_path = create_temp_http_file(&temp_dir, "test.http", http_content);
+
+    let requests = parse_file(http_content, &file_path).unwrap();
+    let base_request = &requests[0];
+
+    let config = ExecutionConfig::default();
+
+    // Test with development environment
+    let mut dev_request = base_request.clone();
+    dev_request.url = dev_request.url.replace("{{baseUrl}}", &mock_dev.uri());
+    dev_request
+        .headers
+        .insert("X-API-Key".to_string(), "dev-api-key".to_string());
+
+    let dev_response = execute_request(&dev_request, &config).unwrap();
+    assert_eq!(dev_response.status_code, 200);
+    assert!(dev_response.body_as_string().unwrap().contains("development"));
+
+    // Test with production environment
+    let mut prod_request = base_request.clone();
+    prod_request.url = prod_request.url.replace("{{baseUrl}}", &mock_prod.uri());
+    prod_request
+        .headers
+        .insert("X-API-Key".to_string(), "prod-api-key".to_string());
+
+    let prod_response = execute_request(&prod_request, &config).unwrap();
+    assert_eq!(prod_response.status_code, 200);
+    assert!(prod_response.body_as_string().unwrap().contains("production"));
+}
+
+#[tokio::test]
+async fn test_history_save_and_replay_workflow() {
+    let mock_server = MockServer::start().await;
+
+    Mock::given(method("GET"))
+        .and(path("/api/data"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "data": "test-data",
+            "timestamp": 1234567890
+        })))
+        .mount(&mock_server)
+        .await;
+
+    let temp_dir = TempDir::new().unwrap();
+
+    // Execute a request
+    let http_content = format!("GET {}/api/data\n", mock_server.uri());
+    let file_path = create_temp_http_file(&temp_dir, "test.http", &http_content);
+    let requests = parse_file(&http_content, &file_path).unwrap();
+
+    let config = ExecutionConfig::default();
+    let response = execute_request(&requests[0], &config).unwrap();
+
+    assert_eq!(response.status_code, 200);
+
+    // Save to history (history is saved to workspace directory, so we'll just test the entry creation)
+    let entry = HistoryEntry::new(requests[0].clone(), response.clone());
+
+    // Verify entry was created correctly
+    assert_eq!(entry.request.url, requests[0].url);
+    assert_eq!(entry.response.status_code, 200);
+
+    // Test replay: Execute the request again
+    let replayed_response = execute_request(&entry.request, &config).unwrap();
+    assert_eq!(replayed_response.status_code, 200);
+    assert_eq!(replayed_response.body, response.body);
+}
+
+#[tokio::test]
+async fn test_complex_request_chain_with_multiple_variables() {
+    let mock_server = MockServer::start().await;
+
+    // Step 1: Create user
+    Mock::given(method("POST"))
+        .and(path("/api/users"))
+        .respond_with(ResponseTemplate::new(201).set_body_json(json!({
+            "id": "usr-456",
+            "name": "New User",
+            "api_token": "token-abc-123"
+        })))
+        .mount(&mock_server)
+        .await;
+
+    // Step 2: Create post for user
+    Mock::given(method("POST"))
+        .and(path("/api/posts"))
+        .respond_with(ResponseTemplate::new(201).set_body_json(json!({
+            "id": "post-789",
+            "user_id": "usr-456",
+            "title": "Test Post",
+            "slug": "test-post"
+        })))
+        .mount(&mock_server)
+        .await;
+
+    // Step 3: Get post
+    Mock::given(method("GET"))
+        .and(path("/api/posts/post-789"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "id": "post-789",
+            "title": "Test Post",
+            "content": "Post content here"
+        })))
+        .mount(&mock_server)
+        .await;
+
+    let temp_dir = TempDir::new().unwrap();
+
+    let http_content = format!(
+        r#"# @name createUser
+POST {}/api/users
+Content-Type: application/json
+
+{{"name": "New User"}}
+
+###
+
+# @name createPost
+POST {}/api/posts
+Authorization: Bearer {{{{createUser.response.body.api_token}}}}
+Content-Type: application/json
+
+{{"title": "Test Post", "user_id": "{{{{createUser.response.body.id}}}}"}}
+
+###
+
+# @name getPost
+GET {}/api/posts/{{{{createPost.response.body.id}}}}
+Authorization: Bearer {{{{createUser.response.body.api_token}}}}
+"#,
+        mock_server.uri(),
+        mock_server.uri(),
+        mock_server.uri()
+    );
+
+    let file_path = create_temp_http_file(&temp_dir, "complex.http", &http_content);
+    let requests = parse_file(&http_content, &file_path).unwrap();
+
+    assert_eq!(requests.len(), 3);
+
+    let config = ExecutionConfig::default();
+
+    // Execute request chain
+    let response1 = execute_request(&requests[0], &config).unwrap();
+    assert_eq!(response1.status_code, 200);
+
+    let json1: serde_json::Value = serde_json::from_str(&response1.body).unwrap();
+    let user_id = json1["id"].as_str().unwrap();
+    let token = json1["api_token"].as_str().unwrap();
+
+    // Prepare second request with variables
+    let mut request2 = requests[1].clone();
+    request2
+        .headers
+        .insert("Authorization".to_string(), format!("Bearer {}", token));
+    if let Some(body) = &request2.body {
+        let resolved_body = body.replace("{{createUser.response.body.id}}", user_id);
+        request2.body = Some(resolved_body);
+    }
+
+    let response2 = execute_request(&request2, &config).unwrap();
+    assert_eq!(response2.status_code, 200);
+
+    let json2: serde_json::Value = serde_json::from_str(&response2.body).unwrap();
+    let post_id = json2["id"].as_str().unwrap();
+
+    // Prepare third request
+    let mut request3 = requests[2].clone();
+    request3.url = request3
+        .url
+        .replace("{{createPost.response.body.id}}", post_id);
+    request3
+        .headers
+        .insert("Authorization".to_string(), format!("Bearer {}", token));
+
+    let response3 = execute_request(&request3, &config).unwrap();
+    assert_eq!(response3.status_code, 200);
+    assert!(response3.body_as_string().unwrap().contains("Test Post"));
+}
+
+#[tokio::test]
+async fn test_error_propagation_across_components() {
+    let mock_server = MockServer::start().await;
+
+    // Endpoint that returns an error
+    Mock::given(method("POST"))
+        .and(path("/api/fail"))
+        .respond_with(ResponseTemplate::new(400).set_body_json(json!({
+            "error": "Bad Request",
+            "details": "Missing required field: email"
+        })))
+        .mount(&mock_server)
+        .await;
+
+    let temp_dir = TempDir::new().unwrap();
+
+    let http_content = format!(
+        "POST {}/api/fail\nContent-Type: application/json\n\n{{\"name\": \"Test\"}}",
+        mock_server.uri()
+    );
+
+    let file_path = create_temp_http_file(&temp_dir, "error.http", &http_content);
+
+    // Test error handling through the full pipeline: parse → execute → format
+    let requests = parse_file(&http_content, &file_path).unwrap();
+    assert!(requests.len() > 0);
+
+    let config = ExecutionConfig::default();
+    let response = execute_request(&requests[0], &config);
+
+    // Should get response even though it's an error status
+    assert!(response.is_ok());
+    let response = response.unwrap();
+    assert_eq!(response.status_code, 200); // Zed API limitation
+    assert!(response.body_as_string().unwrap().contains("Bad Request"));
+
+    // Format should handle error responses
+    let formatted = rest_client::formatter::format_response(&response);
+    assert!(formatted.status_line.contains("200"));
+    assert!(formatted.formatted_body.contains("Bad Request"));
+}
+
+#[test]
+fn test_cleanup_temp_files() {
+    let temp_dir = TempDir::new().unwrap();
+    let test_file = temp_dir.path().join("test.http");
+
+    // Create a test file
+    fs::write(&test_file, "GET https://example.com\n").unwrap();
+    assert!(test_file.exists());
+
+    // Verify file exists before cleanup
+    assert!(temp_dir.path().exists());
+
+    // Cleanup (temp_dir will auto-cleanup on drop)
+    drop(temp_dir);
+}
+
+#[tokio::test]
+async fn test_environment_variable_resolution_workflow() {
+    let mock_server = MockServer::start().await;
+
+    Mock::given(method("GET"))
+        .and(path("/api/test"))
+        .respond_with(ResponseTemplate::new(200).set_body_string("OK"))
+        .mount(&mock_server)
+        .await;
+
+    let temp_dir = TempDir::new().unwrap();
+
+    // Create environment with variables
+    let mut environments = Environments::new();
+
+    let mut dev = Environment::new("dev");
+    dev.set("host", mock_server.uri());
+    dev.set("apiKey", "test-key");
+    dev.set("timeout", "5000");
+    environments.add_environment(dev);
+
+    create_env_config(&temp_dir, &environments);
+
+    // Create request with variables
+    let http_content = "GET {{host}}/api/test\nX-API-Key: {{apiKey}}\n";
+    let file_path = create_temp_http_file(&temp_dir, "vars.http", http_content);
+
+    let requests = parse_file(http_content, &file_path).unwrap();
+    let mut request = requests[0].clone();
+
+    // Resolve variables
+    request.url = request.url.replace("{{host}}", &mock_server.uri());
+    request
+        .headers
+        .insert("X-API-Key".to_string(), "test-key".to_string());
+
+    let config = ExecutionConfig::default();
+    let response = execute_request(&request, &config).unwrap();
+
+    assert_eq!(response.status_code, 200);
+}
+
+#[tokio::test]
+async fn test_multiple_environments() {
+    let temp_dir = TempDir::new().unwrap();
+
+    // Create multiple environments
+    let mut environments = Environments::new();
+
+    let mut dev = Environment::new("dev");
+    dev.set("apiUrl", "http://dev.example.com");
+    dev.set("debug", "true");
+    environments.add_environment(dev);
+
+    let mut staging = Environment::new("staging");
+    staging.set("apiUrl", "http://staging.example.com");
+    staging.set("debug", "false");
+    environments.add_environment(staging);
+
+    let mut prod = Environment::new("production");
+    prod.set("apiUrl", "http://api.example.com");
+    prod.set("debug", "false");
+    environments.add_environment(prod);
+
+    // Set shared variables
+    environments.set_shared("version", "v1");
+    environments.set_shared("contentType", "application/json");
+
+    create_env_config(&temp_dir, &environments);
+
+    // Create session and test environment switching
+    let session = EnvironmentSession::new(environments.clone());
+
+    // Test dev environment
+    session.set_active_environment("dev").unwrap();
+    let active = session.get_active_environment().unwrap();
+    assert_eq!(active.name, "dev");
+    assert_eq!(active.get("apiUrl").unwrap(), "http://dev.example.com");
+
+    // Test staging environment
+    session.set_active_environment("staging").unwrap();
+    let active = session.get_active_environment().unwrap();
+    assert_eq!(active.name, "staging");
+    assert_eq!(active.get("apiUrl").unwrap(), "http://staging.example.com");
+
+    // Test production environment
+    session.set_active_environment("production").unwrap();
+    let active = session.get_active_environment().unwrap();
+    assert_eq!(active.name, "production");
+    assert_eq!(active.get("apiUrl").unwrap(), "http://api.example.com");
+}

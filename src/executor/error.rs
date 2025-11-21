@@ -49,6 +49,11 @@ pub enum RequestError {
     ///
     /// Only HTTP and HTTPS protocols are supported in the MVP.
     UnsupportedProtocol(String),
+
+    /// Unsupported HTTP method.
+    ///
+    /// The requested HTTP method is not supported by the Zed HTTP client.
+    UnsupportedMethod(String),
 }
 
 impl fmt::Display for RequestError {
@@ -63,41 +68,14 @@ impl fmt::Display for RequestError {
             RequestError::UnsupportedProtocol(protocol) => {
                 write!(f, "Unsupported protocol: {}", protocol)
             }
+            RequestError::UnsupportedMethod(msg) => {
+                write!(f, "Unsupported HTTP method: {}", msg)
+            }
         }
     }
 }
 
 impl std::error::Error for RequestError {}
-
-/// Convert reqwest errors to RequestError.
-///
-/// Maps reqwest's error types to our custom error variants for consistent
-/// error handling throughout the application.
-impl From<reqwest::Error> for RequestError {
-    fn from(err: reqwest::Error) -> Self {
-        if err.is_timeout() {
-            RequestError::Timeout
-        } else if err.is_connect() || err.is_request() {
-            RequestError::NetworkError(err.to_string())
-        } else if err.is_builder() {
-            RequestError::BuildError(err.to_string())
-        } else if err.to_string().contains("certificate")
-            || err.to_string().contains("TLS")
-            || err.to_string().contains("SSL")
-        {
-            RequestError::TlsError(err.to_string())
-        } else {
-            RequestError::NetworkError(err.to_string())
-        }
-    }
-}
-
-/// Convert URL parsing errors to RequestError.
-impl From<url::ParseError> for RequestError {
-    fn from(err: url::ParseError) -> Self {
-        RequestError::InvalidUrl(err.to_string())
-    }
-}
 
 #[cfg(test)]
 mod tests {

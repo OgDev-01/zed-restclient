@@ -1,0 +1,29 @@
+### Simple GET request
+GET https://api.example.com/users
+
+### POST request with headers and JSON body
+POST https://api.example.com/users
+Content-Type: application/json
+Authorization: Bearer token123
+
+{
+  "name": "John Doe",
+  "email": "john@example.com"
+}
+
+### GET with variable
+GET https://api.example.com/users/{{userId}}
+X-API-Key: {{apiKey}}
+
+### DELETE request
+DELETE https://api.example.com/users/123
+Authorization: Bearer secret
+
+### Request with XML
+POST https://api.example.com/soap
+Content-Type: application/xml
+
+<user>
+  <name>Alice</name>
+  <email>alice@example.com</email>
+</user>

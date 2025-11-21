@@ -1,79 +1,57 @@
 ; HTTP Request Syntax Highlighting
-; Simple pattern-based highlighting (full Tree-sitter grammar comes in Phase 4)
+;
+; This file is maintained for backward compatibility with older Tree-sitter setups.
+; The actual highlight queries are defined in queries/highlights.scm
+;
+; For the complete and up-to-date syntax highlighting rules, see:
+; - queries/highlights.scm (main highlighting rules)
+; - queries/injections.scm (embedded language support for JSON, XML, GraphQL)
+
+; Include the main highlight queries
+; Note: This is a simple redirect - the actual queries are in the queries/ directory
 
 ; HTTP Methods - highlight as keywords
-; GET, POST, PUT, DELETE, PATCH, OPTIONS, HEAD, TRACE, CONNECT
-(
-  (identifier) @keyword.method
-  (#match? @keyword.method "^(GET|POST|PUT|DELETE|PATCH|OPTIONS|HEAD|TRACE|CONNECT)$")
-)
+(method) @keyword.method
 
 ; URLs - highlight as special strings
-; Matches http://, https://, and other URL patterns
-(
-  (string) @string.special.url
-  (#match? @string.special.url "^https?://")
-)
+(target) @string.special.url
 
-; Request delimiter ### - highlight as delimiter
-(
-  (operator) @keyword.delimiter
-  (#match? @keyword.delimiter "^###")
-)
+; HTTP Version
+(http_version) @constant
 
-; Headers - property style
-; Matches "Header-Name:" pattern
-(
-  (property) @property
-  (#match? @property "^[A-Za-z-]+:")
-)
+; Request Separator
+(request_separator) @keyword.delimiter
 
-; Header values - strings
-(string) @string
+; Headers
+(header_name) @property
+(header_value) @string
 
-; Variables {{variable}} - highlight as parameters
-; Matches {{variableName}} or {{$systemVar}}
-(
-  (variable) @variable.parameter
-  (#match? @variable.parameter "^\\{\\{.*\\}\\}$")
-)
+; Special headers
+((header_name) @property.special
+  (#match? @property.special "^(Content-Type|Authorization|Accept|User-Agent|Accept-Encoding|Cache-Control|Connection|Host|Origin|Referer)$"))
 
-; Comments - both # and // style
+; Comments
 (comment) @comment
 
-; HTTP version - HTTP/1.1, HTTP/2, etc.
-(
-  (identifier) @constant
-  (#match? @constant "^HTTP/[0-9.]+$")
-)
+; Request Body
+(body_content) @string
 
-; Status codes in responses (if viewing response files)
-(
-  (number) @number
-  (#match? @number "^[1-5][0-9]{2}$")
-)
+; Punctuation
+":" @punctuation.delimiter
 
-; JSON body content type
-(
-  (string) @string.special
-  (#match? @string.special "application/json")
-)
+; Content-Type values
+((header_value) @string.special
+  (#match? @string.special "application/(json|xml|graphql|x-www-form-urlencoded)"))
 
-; Content-Type and other important headers
-(
-  (property) @property.special
-  (#match? @property.special "^(Content-Type|Authorization|Accept|User-Agent):")
-)
+((header_value) @string.special
+  (#match? @string.special "text/(xml|html|plain|css|javascript)"))
 
-; Boolean values in JSON bodies
-(
-  (boolean) @constant.builtin.boolean
-)
+((header_value) @string.special
+  (#match? @string.special "multipart/form-data"))
 
-; Null values in JSON bodies
-(
-  (null) @constant.builtin
-)
+; Authentication patterns
+((header_value) @string.special
+  (#match? @string.special "^Bearer "))
 
-; Numbers in request bodies
-(number) @number
+((header_value) @string.special
+  (#match? @string.special "^Basic "))

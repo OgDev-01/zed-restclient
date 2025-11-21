@@ -197,6 +197,124 @@ The default request timeout is 30 seconds. This can be configured in the extensi
 
 Responses larger than 1MB will be truncated with a warning message to prevent performance issues.
 
+## Response Actions
+
+The REST Client provides several actions to interact with response data:
+
+### Save Response
+
+Save response data to a file with automatically suggested filenames:
+
+- **Full Response**: Saves status line, headers, and body
+- **Body Only**: Saves only the response body (most common)
+- **Headers Only**: Saves status line and headers
+
+**Filename Suggestions:**
+- GET request to `/users` → `get-users-response.json`
+- POST request to `/posts` → `post-posts-response.json`
+- Automatically uses appropriate extension based on content type (json, xml, html, txt, bin)
+
+**Usage in Code:**
+```rust
+use rest_client::commands::save_response_command;
+use rest_client::ui::response_actions::SaveOption;
+
+let result = save_response_command(&response, &request, SaveOption::BodyOnly);
+println!("Save to: {:?}", result.suggested_path);
+```
+
+### Copy to Clipboard
+
+Copy response data to clipboard for use in other tools:
+
+- **Full Response**: Copies complete response with status and headers
+- **Body**: Copies only the response body
+- **Headers**: Copies only headers
+- **Status Line**: Copies only the HTTP status line
+
+**Usage in Code:**
+```rust
+use rest_client::commands::copy_response_command;
+use rest_client::ui::response_actions::CopyOption;
+
+let result = copy_response_command(&response, CopyOption::Body);
+// Content is ready to be copied: result.content
+```
+
+### Fold/Unfold Large Responses
+
+For large JSON or XML responses, you can fold sections to make them more manageable:
+
+- **JSON**: Folds large arrays and objects (configurable threshold)
+- **XML**: Folds large XML nodes
+- **Default Threshold**: 10 lines
+
+**Example:**
+```json
+// Before folding:
+{
+  "users": [
+    {"id": 1, "name": "Alice"},
+    {"id": 2, "name": "Bob"},
+    {"id": 3, "name": "Charlie"},
+    // ... 100 more items
+  ]
+}
+
+// After folding:
+{
+  "users": [ ... 103 items folded ... ],
+  "total": 103
+}
+```
+
+**Usage in Code:**
+```rust
+use rest_client::commands::fold_response_command;
+
+let result = fold_response_command(&response, 10);
+println!("Folded {} sections", result.sections_folded);
+```
+
+### Toggle Raw View
+
+Switch between formatted (pretty-printed) and raw (exact bytes) view:
+
+- **Formatted View**: Pretty-printed with syntax highlighting
+- **Raw View**: Exact bytes received from server without formatting
+
+**Usage in Code:**
+```rust
+use rest_client::commands::toggle_raw_view_command;
+
+let toggled = toggle_raw_view_command(&response);
+// toggled.is_formatted is now opposite of response.is_formatted
+```
+
+### Action Menu
+
+When viewing responses, an action menu is automatically displayed showing available actions:
+
+```
+╭─────────────────────────────────────────────────────────╮
+│               Response Actions Available               │
+├─────────────────────────────────────────────────────────┤
+│ 💾 Save Response:                                       │
+│    • Full Response (status + headers + body)           │
+│    • Body Only                                          │
+│    • Headers Only                                       │
+├─────────────────────────────────────────────────────────┤
+│ 📋 Copy to Clipboard:                                   │
+│    • Full Response                                      │
+│    • Body Only                                          │
+│    • Headers Only                                       │
+│    • Status Line Only                                   │
+├─────────────────────────────────────────────────────────┤
+│ 🔄 View Mode: Formatted (toggle to raw)                │
+│ 📁 Fold/Unfold: Available for large sections           │
+╰─────────────────────────────────────────────────────────╯
+```
+
 ## Error Handling
 
 The extension provides clear error messages for common issues:

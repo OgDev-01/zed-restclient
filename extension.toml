@@ -6,5 +6,31 @@ schema_version = 1
 authors = ["REST Client Contributors"]
 repository = "https://github.com/zed-industries/zed-rest-client"
 
+[slash_commands.send-request]
+description = "Send an HTTP request from the current selection"
+requires_argument = false
+
+[slash_commands.paste-curl]
+description = "Convert a cURL command to HTTP request format"
+requires_argument = true
+
+[slash_commands.copy-as-curl]
+description = "Convert an HTTP request to a cURL command"
+requires_argument = false
+
 [languages.http]
 path = "languages/http"
+
+# Settings schema for the REST Client extension
+# Users can configure these settings in their Zed settings.json under "rest-client"
+[settings]
+timeout = { description = "Request timeout in milliseconds (default: 30000)", type = "integer", default = 30000 }
+followRedirects = { description = "Automatically follow HTTP redirects (default: true)", type = "boolean", default = true }
+maxRedirects = { description = "Maximum number of redirects to follow (default: 10)", type = "integer", default = 10 }
+validateSSL = { description = "Validate SSL/TLS certificates (default: true)", type = "boolean", default = true }
+responsePane = { description = "Position of response pane: 'right', 'below', or 'tab' (default: 'right')", type = "string", default = "right" }
+historyLimit = { description = "Maximum number of requests to keep in history (default: 1000)", type = "integer", default = 1000 }
+previewResponseInTab = { description = "Open responses in a new tab instead of a pane (default: false)", type = "boolean", default = false }
+environmentFile = { description = "Path to environment variables file (default: '.http-client-env.json')", type = "string", default = ".http-client-env.json" }
+excludeHostsFromProxy = { description = "List of hostnames to exclude from proxy settings (default: [])", type = "array", default = [] }
+defaultHeaders = { description = "Default headers to include in all requests (default: {'User-Agent': 'Zed-REST-Client/1.0'})", type = "object", default = {} }

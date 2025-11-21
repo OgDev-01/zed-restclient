@@ -1,0 +1,246 @@
+### Environment Variable Resolution Examples
+
+# This file demonstrates how environment variables work with the REST Client
+# Variables can be defined in .http-client-env.json files and are resolved
+# with proper precedence: active environment > shared variables
+
+# SETUP: This example assumes you have a .http-client-env.json file like:
+# {
+#   "$shared": {
+#     "contentType": "application/json",
+#     "userAgent": "REST-Client/1.0",
+#     "apiVersion": "v1"
+#   },
+#   "dev": {
+#     "baseUrl": "http://localhost:3000",
+#     "apiKey": "dev-api-key-12345",
+#     "timeout": "30"
+#   },
+#   "staging": {
+#     "baseUrl": "https://staging.api.example.com",
+#     "apiKey": "staging-api-key-67890",
+#     "timeout": "60"
+#   },
+#   "production": {
+#     "baseUrl": "https://api.example.com",
+#     "apiKey": "{{$processEnv PROD_API_KEY}}",
+#     "timeout": "120"
+#   },
+#   "active": "dev"
+# }
+
+###
+
+# 1. ENVIRONMENT-SPECIFIC VARIABLES
+# Variables defined in the active environment take precedence
+# With "dev" active, baseUrl resolves to http://localhost:3000
+
+GET {{baseUrl}}/api/users
+Authorization: Bearer {{apiKey}}
+User-Agent: {{userAgent}}
+
+# Result when dev is active:
+# GET http://localhost:3000/api/users
+# Authorization: Bearer dev-api-key-12345
+# User-Agent: REST-Client/1.0
+
+###
+
+# 2. SHARED VARIABLES AS FALLBACK
+# Shared variables (defined in $shared) are used when not overridden
+# by environment-specific variables
+
+POST {{baseUrl}}/api/{{apiVersion}}/users
+Content-Type: {{contentType}}
+User-Agent: {{userAgent}}
+
+{
+  "name": "John Doe",
+  "email": "john@example.com"
+}
+
+# apiVersion comes from $shared since it's not defined in dev environment
+# contentType and userAgent also come from $shared
+
+###
+
+# 3. ENVIRONMENT OVERRIDES SHARED
+# If a variable exists in both $shared and the active environment,
+# the environment-specific value takes precedence
+
+GET {{baseUrl}}/health
+X-Timeout: {{timeout}}
+
+# With dev active: timeout = 30 (from dev environment)
+# With staging active: timeout = 60 (from staging environment)
+# With production active: timeout = 120 (from production environment)
+
+###
+
+# 4. NESTED VARIABLE REFERENCES
+# Variables can reference other variables, even across shared/environment boundary
+
+# Add these to your environment file:
+# "$shared": {
+#   "apiPath": "/api/{{apiVersion}}",
+#   "fullEndpoint": "{{baseUrl}}{{apiPath}}"
+# }
+
+GET {{fullEndpoint}}/users
+Authorization: Bearer {{apiKey}}
+
+# Resolution chain:
+# fullEndpoint -> {{baseUrl}}{{apiPath}}
+# baseUrl -> http://localhost:3000 (from dev)
+# apiPath -> /api/{{apiVersion}}
+# apiVersion -> v1 (from shared)
+# Final: GET http://localhost:3000/api/v1/users
+
+###
+
+# 5. COMBINING SYSTEM AND ENVIRONMENT VARIABLES
+# System variables (like $processEnv) can be used in environment definitions
+# This is useful for keeping secrets out of the environment file
+
+POST {{baseUrl}}/api/{{apiVersion}}/events
+Content-Type: {{contentType}}
+Authorization: Bearer {{apiKey}}
+X-Request-ID: {{$guid}}
+
+{
+  "event": "user.login",
+  "timestamp": {{$timestamp}},
+  "environment": "production",
+  "metadata": {
+    "requestId": "{{$guid}}",
+    "createdAt": "{{$datetime iso8601}}"
+  }
+}
+
+# When production environment is active, apiKey resolves to {{$processEnv PROD_API_KEY}}
+# which then reads the PROD_API_KEY from your system environment variables
+
+###
+
+# 6. SWITCHING ENVIRONMENTS
+# Use the command palette to switch between environments:
+# "REST Client: Switch Environment"
+#
+# When you switch from dev to staging:
+# - baseUrl changes from http://localhost:3000 to https://staging.api.example.com
+# - apiKey changes from dev-api-key-12345 to staging-api-key-67890
+# - timeout changes from 30 to 60
+# - But shared variables (apiVersion, contentType, userAgent) remain the same
+
+GET {{baseUrl}}/api/{{apiVersion}}/status
+User-Agent: {{userAgent}}
+
+###
+
+# 7. CASE-SENSITIVE VARIABLE NAMES
+# Variable names are case-sensitive
+
+GET {{baseUrl}}/api/users
+X-Base-URL: {{baseUrl}}
+X-Base-Url: {{baseURL}}  # Different variable!
+
+# {{baseUrl}} and {{baseURL}} are different variables
+
+###
+
+# 8. MISSING VARIABLES HANDLING
+# If a variable is not found in environment or shared variables,
+# it produces a warning diagnostic but uses empty string
+
+GET {{baseUrl}}/api/users
+X-Custom-Header: {{undefinedVariable}}
+
+# undefinedVariable will be replaced with empty string
+# A warning diagnostic will be shown in the editor
+
+###
+
+# 9. MULTIPLE ENVIRONMENTS FOR DIFFERENT APIS
+# You can organize environments for different services
+
+# Example environment file:
+# {
+#   "$shared": {
+#     "apiVersion": "v2"
+#   },
+#   "local-auth": {
+#     "authUrl": "http://localhost:8080",
+#     "authKey": "local-auth-key"
+#   },
+#   "local-data": {
+#     "dataUrl": "http://localhost:9090",
+#     "dataKey": "local-data-key"
+#   },
+#   "prod-auth": {
+#     "authUrl": "https://auth.example.com",
+#     "authKey": "{{$processEnv PROD_AUTH_KEY}}"
+#   },
+#   "active": "local-auth"
+# }
+
+# Login to auth service
+POST {{authUrl}}/api/{{apiVersion}}/login
+Content-Type: application/json
+X-API-Key: {{authKey}}
+
+{
+  "username": "admin",
+  "password": "{{$processEnv ADMIN_PASSWORD}}"
+}
+
+###
+
+# 10. VARIABLE PRECEDENCE SUMMARY
+# When resolving {{variableName}}, the system checks in this order:
+#
+# 1. System variables (if name starts with $)
+# 2. Request variables (captured from previous responses - Phase 3 feature)
+# 3. File-level variables (defined in .http file - less common)
+# 4. Active environment variables (from current environment)
+# 5. Shared variables (from $shared section)
+# 6. If not found: empty string + warning diagnostic
+
+GET {{baseUrl}}/api/test
+X-System: {{$guid}}                    # Priority 1: System variable
+X-Request: {{capturedToken}}           # Priority 2: Request variable (Phase 3)
+X-File: {{fileVariable}}               # Priority 3: File variable
+X-Environment: {{baseUrl}}             # Priority 4: Environment variable
+X-Shared: {{apiVersion}}               # Priority 5: Shared variable
+X-Missing: {{notDefined}}              # Priority 6: Empty string + warning
+
+###
+
+# 11. BEST PRACTICES
+
+# ✅ DO: Use environment files for different deployment environments
+# ✅ DO: Store secrets using $processEnv or $dotenv
+# ✅ DO: Use shared variables for common values across all environments
+# ✅ DO: Use meaningful variable names (e.g., baseUrl, apiKey, timeout)
+
+# ❌ DON'T: Hardcode secrets in environment files
+# ❌ DON'T: Use special characters in variable names
+# ❌ DON'T: Create circular variable references
+
+# Example of GOOD environment file structure:
+# {
+#   "$shared": {
+#     "contentType": "application/json",
+#     "apiVersion": "v1",
+#     "userAgent": "MyApp/1.0"
+#   },
+#   "dev": {
+#     "baseUrl": "http://localhost:3000",
+#     "apiKey": "dev-key-safe-to-commit"
+#   },
+#   "prod": {
+#     "baseUrl": "https://api.example.com",
+#     "apiKey": "{{$processEnv PROD_API_KEY}}"
+#   }
+# }
+
+###

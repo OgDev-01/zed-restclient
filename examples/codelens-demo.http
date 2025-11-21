@@ -1,0 +1,194 @@
+# CodeLens Feature Demo
+#
+# This file demonstrates the CodeLens feature for REST Client.
+# You should see a clickable "▶ Send Request" lens above each HTTP request.
+
+### Basic Request
+
+GET https://api.github.com/zen
+
+### Named Request
+
+# @name GetGitHubUser
+GET https://api.github.com/users/octocat
+Accept: application/json
+
+### Multiple Requests Without Delimiter
+
+# These two requests will each have their own CodeLens
+# even though there's no ### delimiter between them
+
+# @name SearchRepositories
+GET https://api.github.com/search/repositories?q=rest+client&sort=stars
+Accept: application/json
+
+# @name GetRepository
+GET https://api.github.com/repos/octocat/hello-world
+Accept: application/json
+
+### Request with Headers and Body
+
+# @name CreateGist
+POST https://api.github.com/gists
+Content-Type: application/json
+Accept: application/json
+
+{
+  "description": "Example gist created from REST Client",
+  "public": true,
+  "files": {
+    "example.txt": {
+      "content": "Hello from REST Client!"
+    }
+  }
+}
+
+### Section Organization
+
+### Authentication Section
+
+# @name Login
+POST https://api.example.com/auth/login
+Content-Type: application/json
+
+{
+  "username": "demo",
+  "password": "demo123"
+}
+
+###
+
+### User Management Section
+
+# @name GetUserProfile
+GET https://api.example.com/users/me
+Authorization: Bearer {{authToken}}
+
+###
+
+# @name UpdateUserProfile
+PUT https://api.example.com/users/me
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "name": "Updated Name",
+  "email": "newemail@example.com"
+}
+
+### Variables
+
+@baseUrl = https://jsonplaceholder.typicode.com
+@userId = 1
+
+###
+
+# @name GetTodo
+GET {{baseUrl}}/todos/{{userId}}
+
+###
+
+# @name CreateTodo
+POST {{baseUrl}}/todos
+Content-Type: application/json
+
+{
+  "userId": 1,
+  "title": "Test Todo",
+  "completed": false
+}
+
+### All HTTP Methods
+
+# @name GetRequest
+GET https://httpbin.org/get
+
+###
+
+# @name PostRequest
+POST https://httpbin.org/post
+Content-Type: application/json
+
+{"key": "value"}
+
+###
+
+# @name PutRequest
+PUT https://httpbin.org/put
+Content-Type: application/json
+
+{"updated": true}
+
+###
+
+# @name PatchRequest
+PATCH https://httpbin.org/patch
+Content-Type: application/json
+
+{"partial": "update"}
+
+###
+
+# @name DeleteRequest
+DELETE https://httpbin.org/delete
+
+###
+
+# @name HeadRequest
+HEAD https://httpbin.org/get
+
+###
+
+# @name OptionsRequest
+OPTIONS https://httpbin.org/get
+
+### Advanced Features
+
+# @name GraphQLQuery
+POST https://api.github.com/graphql
+Content-Type: application/json
+Authorization: Bearer {{githubToken}}
+
+{
+  "query": "{ viewer { login name } }"
+}
+
+###
+
+# @name FileUpload
+POST https://httpbin.org/post
+Content-Type: multipart/form-data; boundary=----FormBoundary
+
+------FormBoundary
+Content-Disposition: form-data; name="file"; filename="test.txt"
+Content-Type: text/plain
+
+File content here
+------FormBoundary--
+
+###
+
+# @name RequestWithQueryParams
+GET https://httpbin.org/get?param1=value1&param2=value2&search=rest+client
+Accept: application/json
+
+###
+
+# @name ComplexHeaders
+GET https://httpbin.org/headers
+User-Agent: REST-Client/1.0
+Accept: application/json
+Accept-Language: en-US,en;q=0.9
+Cache-Control: no-cache
+X-Custom-Header: CustomValue
+X-Request-ID: {{$guid}}
+
+### Instructions
+
+# 1. Click any "▶ Send Request" lens above a request to execute it
+# 2. Named requests show their name in the CodeLens (e.g., "▶ Send Request: GetGitHubUser")
+# 3. CodeLens updates automatically as you type
+# 4. All HTTP methods (GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS) are supported
+# 5. Variables like {{baseUrl}} and {{userId}} are substituted before sending
+# 6. Section headers (### Section Name) are treated as comments
+# 7. Use standalone ### to separate requests

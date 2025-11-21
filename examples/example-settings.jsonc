@@ -1,0 +1,121 @@
+{
+  "rest-client": {
+    // Network Settings
+    // ================
+
+    // Request timeout in milliseconds (default: 30000)
+    // Maximum time to wait for a complete response
+    "timeout": 30000,
+
+    // Automatically follow HTTP redirects (default: true)
+    "followRedirects": true,
+
+    // Maximum number of redirects to follow (default: 10)
+    // Only applies when followRedirects is true
+    "maxRedirects": 10,
+
+    // Validate SSL/TLS certificates (default: true)
+    // ⚠️ Warning: Disabling can expose you to security risks
+    "validateSSL": true,
+
+
+    // UI Settings
+    // ===========
+
+    // Position of the response pane (default: "right")
+    // Options: "right", "below", "tab"
+    "responsePane": "right",
+
+    // Open responses in a new tab instead of a pane (default: false)
+    "previewResponseInTab": false,
+
+
+    // History Settings
+    // ================
+
+    // Maximum number of requests to keep in history (default: 1000)
+    // Older requests are automatically removed
+    "historyLimit": 1000,
+
+
+    // Environment Settings
+    // ====================
+
+    // Path to environment variables file (default: ".http-client-env.json")
+    // The extension searches in workspace root and up to 3 parent directories
+    "environmentFile": ".http-client-env.json",
+
+
+    // Proxy Settings
+    // ==============
+
+    // List of hostnames to exclude from proxy settings (default: [])
+    // Supports wildcards like "*.internal.com" and IP patterns
+    "excludeHostsFromProxy": [
+      "localhost",
+      "127.0.0.1",
+      "*.local",
+      "*.internal.example.com"
+    ],
+
+
+    // Default Headers
+    // ===============
+
+    // Headers to include in all requests (default: {"User-Agent": "Zed-REST-Client/1.0"})
+    // Request-specific headers override these defaults
+    "defaultHeaders": {
+      "User-Agent": "Zed-REST-Client/1.0",
+      "Accept": "application/json",
+      "Accept-Encoding": "gzip, deflate"
+    }
+  },
+
+
+  // Example Preset Configurations
+  // ==============================
+
+  // Development Environment
+  // Uncomment and customize as needed:
+  /*
+  "rest-client": {
+    "timeout": 10000,
+    "validateSSL": false,
+    "historyLimit": 500,
+    "responsePane": "below",
+    "excludeHostsFromProxy": ["localhost", "127.0.0.1", "*.local"],
+    "defaultHeaders": {
+      "User-Agent": "DevEnv-REST-Client/1.0"
+    }
+  }
+  */
+
+  // Production Testing
+  /*
+  "rest-client": {
+    "timeout": 60000,
+    "validateSSL": true,
+    "followRedirects": true,
+    "maxRedirects": 5,
+    "historyLimit": 2000,
+    "defaultHeaders": {
+      "User-Agent": "Zed-REST-Client/1.0",
+      "Accept": "application/json",
+      "Accept-Encoding": "gzip, deflate"
+    }
+  }
+  */
+
+  // API Development
+  /*
+  "rest-client": {
+    "timeout": 30000,
+    "responsePane": "right",
+    "historyLimit": 1000,
+    "defaultHeaders": {
+      "Content-Type": "application/json",
+      "Accept": "application/json"
+    }
+  }
+  */
+}

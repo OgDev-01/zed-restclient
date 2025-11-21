@@ -4,9 +4,18 @@
 //! including content type detection, pretty-printing, and metadata extraction.
 
 pub mod content_type;
+pub mod graphql;
+pub mod json;
+pub mod syntax;
+pub mod xml;
 
 pub use content_type::{detect_content_type, ContentType};
+pub use graphql::{format_graphql_query, format_graphql_request, format_graphql_response};
+pub use json::{format_json_pretty, format_json_safe, minify_json, validate_json};
+pub use syntax::{apply_syntax_highlighting, detect_language, HighlightInfo, Language};
+pub use xml::{format_xml_pretty, format_xml_safe, minify_xml, validate_xml};
 
+use crate::executor::timing::format_timing_breakdown;
 use crate::models::response::HttpResponse;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -78,6 +87,9 @@ pub struct ResponseMetadata {
 
     /// Whether the response was truncated due to size.
     pub is_truncated: bool,
+
+    /// Timing breakdown for detailed performance metrics.
+    pub timing_breakdown: String,
 }
 
 impl ResponseMetadata {
@@ -93,6 +105,8 @@ impl ResponseMetadata {
         content_type: ContentType,
         is_truncated: bool,
     ) -> Self {
+        let timing_breakdown = format_timing_breakdown(&response.timing);
+
         Self {
             status_code: response.status_code,
             status_text: response.status_text.clone(),
@@ -101,6 +115,7 @@ impl ResponseMetadata {
             content_type,
             is_success: response.is_success(),
             is_truncated,
+            timing_breakdown,
         }
     }
 
@@ -146,6 +161,9 @@ pub struct FormattedResponse {
     /// Formatted response body.
     pub formatted_body: String,
 
+    /// Raw (unformatted) response body.
+    pub raw_body: String,
+
     /// Formatted status line (e.g., "HTTP/1.1 200 OK").
     pub status_line: String,
 
@@ -154,6 +172,12 @@ pub struct FormattedResponse {
 
     /// Response metadata.
     pub metadata: ResponseMetadata,
+
+    /// Syntax highlighting information.
+    pub highlight_info: Option<HighlightInfo>,
+
+    /// Whether the response is currently showing formatted or raw view.
+    pub is_formatted: bool,
 }
 
 impl FormattedResponse {
@@ -185,6 +209,9 @@ impl FormattedResponse {
             self.content_type.as_str()
         ));
 
+        // Timing breakdown
+        output.push_str(&format!("Timing: {}\n", self.metadata.timing_breakdown));
+
         if self.metadata.is_truncated {
             output.push_str("⚠️  Response truncated (exceeds 1MB limit)\n");
         }
@@ -195,6 +222,59 @@ impl FormattedResponse {
         output.push_str(&self.formatted_body);
 
         output
+    }
+
+    /// Toggles between formatted and raw view.
+    ///
+    /// Switches the formatted_body between the pretty-printed version
+    /// and the raw unformatted version.
+    pub fn toggle_view(&mut self) {
+        if self.is_formatted {
+            // Switch to raw view
+            self.formatted_body = self.raw_body.clone();
+            self.is_formatted = false;
+        } else {
+            // Switch back to formatted view by reformatting
+            self.formatted_body = match self.content_type {
+                ContentType::Json => {
+                    format_json_pretty(&self.raw_body).unwrap_or_else(|_| self.raw_body.clone())
+                }
+                ContentType::Xml => {
+                    format_xml_pretty(&self.raw_body).unwrap_or_else(|_| self.raw_body.clone())
+                }
+                _ => self.raw_body.clone(),
+            };
+            self.is_formatted = true;
+        }
+    }
+
+    /// Gets the current body (formatted or raw based on current view).
+    pub fn get_body(&self) -> &str {
+        &self.formatted_body
+    }
+
+    /// Gets the raw unformatted body.
+    pub fn get_raw_body(&self) -> &str {
+        &self.raw_body
+    }
+
+    /// Gets the formatted (pretty-printed) body.
+    ///
+    /// This will format the raw body even if currently in raw view.
+    pub fn get_formatted_body(&self) -> String {
+        if self.is_formatted {
+            self.formatted_body.clone()
+        } else {
+            match self.content_type {
+                ContentType::Json => {
+                    format_json_pretty(&self.raw_body).unwrap_or_else(|_| self.raw_body.clone())
+                }
+                ContentType::Xml => {
+                    format_xml_pretty(&self.raw_body).unwrap_or_else(|_| self.raw_body.clone())
+                }
+                _ => self.raw_body.clone(),
+            }
+        }
     }
 }
 
@@ -225,39 +305,105 @@ pub fn format_response(response: &HttpResponse) -> FormattedResponse {
     // Detect content type
     let content_type = detect_content_type(&response.headers, &response.body);
 
-    // Check if response is too large
-    let is_truncated = response.body.len() > MAX_RESPONSE_SIZE;
+    // Check if response is too large (use 10MB limit for enhanced formatters)
+    let max_size = 10 * 1024 * 1024; // 10MB for enhanced formatters
+    let is_truncated = response.body.len() > max_size;
     let body_to_format = if is_truncated {
-        &response.body[..MAX_RESPONSE_SIZE]
+        &response.body[..max_size]
     } else {
         &response.body
     };
 
-    // Format the body based on content type
-    let formatted_body = match content_type {
+    // Store raw body for toggle feature
+    let raw_body = if let Ok(text) = std::str::from_utf8(body_to_format) {
+        text.to_string()
+    } else {
+        format!("[Binary data: {} bytes]", body_to_format.len())
+    };
+
+    // Check if this is a GraphQL response (JSON with "data" or "errors" fields)
+    let is_graphql_response = if content_type == ContentType::Json {
+        if let Ok(text) = std::str::from_utf8(body_to_format) {
+            if let Ok(json_value) = serde_json::from_str::<serde_json::Value>(text) {
+                json_value.get("data").is_some() || json_value.get("errors").is_some()
+            } else {
+                false
+            }
+        } else {
+            false
+        }
+    } else {
+        false
+    };
+
+    // Format the body based on content type using enhanced formatters
+    let (formatted_body, highlight_info) = match content_type {
         ContentType::Json => {
             if let Ok(text) = std::str::from_utf8(body_to_format) {
-                format_json(text).unwrap_or_else(|_| text.to_string())
+                // Check if this is a GraphQL response and format accordingly
+                if is_graphql_response {
+                    if let Ok(graphql_resp) =
+                        serde_json::from_str::<crate::graphql::GraphQLResponse>(text)
+                    {
+                        let formatted = format_graphql_response(&graphql_resp);
+                        let info = HighlightInfo::new(Language::Json);
+                        (formatted, Some(info))
+                    } else {
+                        // Fallback to regular JSON formatting if GraphQL parsing fails
+                        let formatted =
+                            format_json_pretty(text).unwrap_or_else(|_| text.to_string());
+                        let info = HighlightInfo::new(Language::Json);
+                        (formatted, Some(info))
+                    }
+                } else {
+                    // Use enhanced JSON formatter with syntax highlighting
+                    let formatted = format_json_pretty(text).unwrap_or_else(|_| text.to_string());
+                    let info = HighlightInfo::new(Language::Json);
+                    (formatted, Some(info))
+                }
             } else {
-                format!("[Error: Invalid UTF-8 encoding in JSON response]")
+                (
+                    format!("[Error: Invalid UTF-8 encoding in JSON response]"),
+                    None,
+                )
             }
         }
         ContentType::Xml => {
             if let Ok(text) = std::str::from_utf8(body_to_format) {
-                format_xml(text).unwrap_or_else(|_| text.to_string())
+                // Use enhanced XML formatter with syntax highlighting
+                let formatted = format_xml_pretty(text).unwrap_or_else(|_| text.to_string());
+                let info = HighlightInfo::new(Language::Xml);
+                (formatted, Some(info))
             } else {
-                format!("[Error: Invalid UTF-8 encoding in XML response]")
+                (
+                    format!("[Error: Invalid UTF-8 encoding in XML response]"),
+                    None,
+                )
             }
         }
-        ContentType::Html | ContentType::PlainText => {
+        ContentType::Html => {
             if let Ok(text) = std::str::from_utf8(body_to_format) {
-                text.to_string()
+                let info = HighlightInfo::new(Language::Html);
+                (text.to_string(), Some(info))
             } else {
-                format!("[Error: Invalid UTF-8 encoding in text response]")
+                (
+                    format!("[Error: Invalid UTF-8 encoding in HTML response]"),
+                    None,
+                )
             }
         }
-        ContentType::Binary => format_binary_preview(body_to_format),
-        ContentType::Image => format_image_info(body_to_format, response.size),
+        ContentType::PlainText => {
+            if let Ok(text) = std::str::from_utf8(body_to_format) {
+                (text.to_string(), None)
+            } else {
+                (
+                    format!("[Error: Invalid UTF-8 encoding in text response]"),
+                    None,
+                )
+            }
+        }
+        ContentType::Binary => (format_binary_preview(body_to_format), None),
+        ContentType::Image => (format_image_info(body_to_format, response.size), None),
     };
 
     // Format status line
@@ -272,13 +418,18 @@ pub fn format_response(response: &HttpResponse) -> FormattedResponse {
     FormattedResponse {
         content_type,
         formatted_body,
+        raw_body,
         status_line,
         headers_text,
         metadata,
+        highlight_info,
+        is_formatted: true,
     }
 }
 
 /// Formats JSON with pretty-printing.
+///
+/// **Deprecated**: Use `format_json_pretty` from the `json` module instead.
 ///
 /// Parses the JSON and reformats it with indentation for readability.
 ///
@@ -299,17 +450,17 @@ pub fn format_response(response: &HttpResponse) -> FormattedResponse {
 /// let formatted = format_json(json).unwrap();
 /// assert!(formatted.contains("  "));
 /// ```
+#[deprecated(since = "0.2.0", note = "Use format_json_pretty from json module")]
 pub fn format_json(json: &str) -> Result<String, FormatError> {
-    let value: serde_json::Value =
-        serde_json::from_str(json).map_err(|e| FormatError::JsonError(e.to_string()))?;
-
-    serde_json::to_string_pretty(&value).map_err(|e| FormatError::JsonError(e.to_string()))
+    // Delegate to enhanced JSON formatter
+    format_json_pretty(json)
 }
 
-/// Formats XML with basic indentation.
+/// Formats XML with pretty-printing.
 ///
-/// Provides simple XML formatting with indentation for MVP.
-/// Full XML formatting with proper parsing will be added in Phase 3.
+/// **Deprecated**: Use `format_xml_pretty` from the `xml` module instead.
+///
+/// Provides XML formatting with proper indentation.
 ///
 /// # Arguments
 ///
@@ -328,55 +479,10 @@ pub fn format_json(json: &str) -> Result<String, FormatError> {
 /// let formatted = format_xml(xml).unwrap();
 /// assert!(formatted.contains("  "));
 /// ```
+#[deprecated(since = "0.2.0", note = "Use format_xml_pretty from xml module")]
 pub fn format_xml(xml: &str) -> Result<String, FormatError> {
-    let mut formatted = String::new();
-    let mut indent_level: usize = 0;
-    let mut in_tag = false;
-    let mut tag_start_pos = 0;
-    let chars: Vec<char> = xml.chars().collect();
-    let mut i = 0;
-
-    while i < chars.len() {
-        let ch = chars[i];
-
-        if ch == '<' {
-            // Check if this is a closing tag
-            let is_closing = i + 1 < chars.len() && chars[i + 1] == '/';
-
-            if is_closing {
-                indent_level = indent_level.saturating_sub(1);
-            }
-
-            // Add newline and indentation before tag (except for first tag)
-            if i > 0 && !in_tag {
-                formatted.push('\n');
-                formatted.push_str(&"  ".repeat(indent_level));
-            }
-
-            // Add the opening bracket
-            formatted.push('<');
-            in_tag = true;
-            tag_start_pos = i;
-        } else if ch == '>' {
-            formatted.push('>');
-            in_tag = false;
-
-            // Check if this was a self-closing tag or declaration
-            let tag_content: String = chars[tag_start_pos..=i].iter().collect();
-            let is_self_closing = tag_content.contains("/>") || tag_content.starts_with("<?");
-            let is_closing = tag_content.starts_with("</");
-
-            if !is_closing && !is_self_closing {
-                indent_level += 1;
-            }
-        } else {
-            formatted.push(ch);
-        }
-
-        i += 1;
-    }
-
-    Ok(formatted)
+    // Delegate to enhanced XML formatter
+    format_xml_pretty(xml)
 }
 
 /// Formats headers as human-readable text.
@@ -634,14 +740,15 @@ mod tests {
     fn test_format_response_large() {
         let mut response = HttpResponse::new(200, "OK".to_string());
         response.add_header("Content-Type".to_string(), "text/plain".to_string());
-        // Create response larger than MAX_RESPONSE_SIZE
-        let large_body = vec![b'A'; MAX_RESPONSE_SIZE + 1000];
+        // Create response larger than 10MB (new limit for enhanced formatters)
+        let max_size = 10 * 1024 * 1024;
+        let large_body = vec![b'A'; max_size + 1000];
         response.set_body(large_body);
 
         let formatted = format_response(&response);
 
         assert!(formatted.metadata.is_truncated);
-        assert_eq!(formatted.formatted_body.len(), MAX_RESPONSE_SIZE);
+        assert_eq!(formatted.formatted_body.len(), max_size);
     }
 
     #[test]
@@ -677,7 +784,46 @@ mod tests {
         assert!(display.contains("Headers:"));
         assert!(display.contains("Duration:"));
         assert!(display.contains("Size:"));
+        assert!(display.contains("Timing:"));
+        assert!(display.contains("DNS:"));
+        assert!(display.contains("TCP:"));
         assert!(display.contains("---"));
+    }
+
+    #[test]
+    fn test_formatted_response_timing_breakdown() {
+        use std::time::Duration;
+
+        let mut response = HttpResponse::new(200, "OK".to_string());
+        response.add_header("Content-Type".to_string(), "text/plain".to_string());
+        response.set_body(b"Hello".to_vec());
+
+        // Set timing data
+        response.timing.dns_lookup = Duration::from_millis(10);
+        response.timing.tcp_connection = Duration::from_millis(20);
+        response.timing.tls_handshake = Some(Duration::from_millis(50));
+        response.timing.first_byte = Duration::from_millis(30);
+        response.timing.download = Duration::from_millis(100);
+
+        let formatted = format_response(&response);
+
+        // Verify timing breakdown is present
+        assert!(formatted.metadata.timing_breakdown.contains("DNS: 10ms"));
+        assert!(formatted.metadata.timing_breakdown.contains("TCP: 20ms"));
+        assert!(formatted.metadata.timing_breakdown.contains("TLS: 50ms"));
+        assert!(formatted
+            .metadata
+            .timing_breakdown
+            .contains("First Byte: 30ms"));
+        assert!(formatted
+            .metadata
+            .timing_breakdown
+            .contains("Download: 100ms"));
+
+        // Verify it's in the display string
+        let display = formatted.to_display_string();
+        assert!(display.contains("Timing:"));
+        assert!(display.contains("DNS: 10ms"));
     }
 
     #[test]

@@ -1,0 +1,302 @@
+# GraphQL Examples for REST Client
+# This file demonstrates GraphQL query support in the REST Client extension
+
+### Example 1: Simple GraphQL Query (No Variables)
+POST https://api.github.com/graphql
+Authorization: Bearer YOUR_TOKEN_HERE
+Content-Type: application/json
+
+query {
+  viewer {
+    login
+    name
+    email
+  }
+}
+
+### Example 2: GraphQL Query with Variables
+POST https://api.github.com/graphql
+Authorization: Bearer YOUR_TOKEN_HERE
+Content-Type: application/json
+
+query GetUser($login: String!) {
+  user(login: $login) {
+    id
+    login
+    name
+    bio
+    avatarUrl
+    repositories(first: 5) {
+      totalCount
+      nodes {
+        name
+        description
+        stargazerCount
+      }
+    }
+  }
+}
+
+{
+  "login": "octocat"
+}
+
+### Example 3: GraphQL Mutation with Variables
+POST https://api.github.com/graphql
+Authorization: Bearer YOUR_TOKEN_HERE
+Content-Type: application/json
+
+mutation AddStar($repositoryId: ID!) {
+  addStar(input: {starrableId: $repositoryId}) {
+    starrable {
+      stargazerCount
+    }
+  }
+}
+
+{
+  "repositoryId": "MDEwOlJlcG9zaXRvcnkxMjk2MjY5"
+}
+
+### Example 4: Complex Nested Query
+POST https://countries.trevorblades.com/graphql
+Content-Type: application/json
+
+query GetCountryInfo($code: ID!) {
+  country(code: $code) {
+    name
+    native
+    capital
+    emoji
+    currency
+    languages {
+      code
+      name
+    }
+    continent {
+      name
+    }
+  }
+}
+
+{
+  "code": "US"
+}
+
+### Example 5: GraphQL Query with Multiple Variables
+POST https://countries.trevorblades.com/graphql
+Content-Type: application/json
+
+query GetCountries($filter: CountryFilterInput) {
+  countries(filter: $filter) {
+    code
+    name
+    capital
+    currency
+  }
+}
+
+{
+  "filter": {
+    "continent": {
+      "eq": "EU"
+    }
+  }
+}
+
+### Example 6: Subscription (Demo Syntax)
+POST wss://example.com/graphql
+Content-Type: application/json
+
+subscription OnMessageAdded {
+  messageAdded {
+    id
+    content
+    user {
+      id
+      name
+    }
+  }
+}
+
+### Example 7: GraphQL with Fragments
+POST https://api.github.com/graphql
+Authorization: Bearer YOUR_TOKEN_HERE
+Content-Type: application/json
+
+query GetRepositories($owner: String!, $name: String!) {
+  repository(owner: $owner, name: $name) {
+    ...RepoInfo
+    issues(first: 5) {
+      nodes {
+        ...IssueInfo
+      }
+    }
+  }
+}
+
+fragment RepoInfo on Repository {
+  id
+  name
+  description
+  stargazerCount
+  forkCount
+}
+
+fragment IssueInfo on Issue {
+  id
+  title
+  state
+  createdAt
+}
+
+{
+  "owner": "facebook",
+  "name": "react"
+}
+
+### Example 8: Auto-detected GraphQL (No Content-Type)
+# When the body starts with 'query' or 'mutation', it's auto-detected as GraphQL
+POST https://countries.trevorblades.com/graphql
+
+query {
+  continents {
+    code
+    name
+  }
+}
+
+### Example 9: Shorthand Query Syntax
+POST https://countries.trevorblades.com/graphql
+Content-Type: application/json
+
+{
+  countries {
+    code
+    name
+  }
+}
+
+### Example 10: GraphQL with Aliases
+POST https://api.github.com/graphql
+Authorization: Bearer YOUR_TOKEN_HERE
+Content-Type: application/json
+
+query {
+  user1: user(login: "octocat") {
+    login
+    name
+  }
+  user2: user(login: "torvalds") {
+    login
+    name
+  }
+}
+
+### Example 11: GraphQL with Directives
+POST https://api.github.com/graphql
+Authorization: Bearer YOUR_TOKEN_HERE
+Content-Type: application/json
+
+query GetUser($login: String!, $includeBio: Boolean!) {
+  user(login: $login) {
+    login
+    name
+    bio @include(if: $includeBio)
+    company @skip(if: $includeBio)
+  }
+}
+
+{
+  "login": "octocat",
+  "includeBio": true
+}
+
+### Example 12: Multiple Operations (Named)
+POST https://countries.trevorblades.com/graphql
+Content-Type: application/json
+
+query GetAllCountries {
+  countries {
+    code
+    name
+  }
+}
+
+query GetAllContinents {
+  continents {
+    code
+    name
+  }
+}
+
+# Note: You can specify which operation to run in variables
+{
+  "operationName": "GetAllCountries"
+}
+
+### Example 13: Complex Variables with Nested Objects
+POST https://api.github.com/graphql
+Authorization: Bearer YOUR_TOKEN_HERE
+Content-Type: application/json
+
+mutation CreateIssue($input: CreateIssueInput!) {
+  createIssue(input: $input) {
+    issue {
+      id
+      title
+      body
+      url
+    }
+  }
+}
+
+{
+  "input": {
+    "repositoryId": "MDEwOlJlcG9zaXRvcnkxMjk2MjY5",
+    "title": "New issue from GraphQL",
+    "body": "This issue was created using GraphQL mutation",
+    "labelIds": ["MDU6TGFiZWwxMjM0NTY3ODk"]
+  }
+}
+
+### Example 14: GraphQL with Array Variables
+POST https://api.example.com/graphql
+Content-Type: application/json
+
+query GetMultipleUsers($ids: [ID!]!) {
+  users(ids: $ids) {
+    id
+    name
+    email
+  }
+}
+
+{
+  "ids": ["1", "2", "3", "4", "5"]
+}
+
+### Example 15: Public GraphQL API Test (SpaceX)
+POST https://spacex-production.up.railway.app/graphql
+Content-Type: application/json
+
+query GetLaunches($limit: Int!) {
+  launches(limit: $limit) {
+    id
+    mission_name
+    launch_date_utc
+    launch_success
+    rocket {
+      rocket_name
+      rocket_type
+    }
+    links {
+      mission_patch_small
+      article_link
+    }
+  }
+}
+
+{
+  "limit": 5
+}

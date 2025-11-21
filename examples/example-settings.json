@@ -1,0 +1,23 @@
+{
+  "rest-client": {
+    "timeout": 30000,
+    "followRedirects": true,
+    "maxRedirects": 10,
+    "validateSsl": true,
+    "responsePane": "right",
+    "previewResponseInTab": false,
+    "historyLimit": 1000,
+    "environmentFile": ".http-client-env.json",
+    "excludeHostsFromProxy": [
+      "localhost",
+      "127.0.0.1",
+      "*.local",
+      "*.internal.example.com"
+    ],
+    "defaultHeaders": {
+      "User-Agent": "Zed-REST-Client/1.0",
+      "Accept": "application/json",
+      "Accept-Encoding": "gzip, deflate"
+    }
+  }
+}

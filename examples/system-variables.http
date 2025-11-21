@@ -1,0 +1,167 @@
+### System Variables Examples for REST Client
+
+# This file demonstrates all available system variables in the REST Client extension
+
+###
+
+# 1. GUID - Generate a unique UUID v4
+# Usage: {{$guid}}
+POST https://httpbin.org/post
+Content-Type: application/json
+
+{
+  "requestId": "{{$guid}}",
+  "correlationId": "{{$guid}}"
+}
+
+###
+
+# 2. TIMESTAMP - Current Unix timestamp in seconds
+# Usage: {{$timestamp}}
+GET https://httpbin.org/get?timestamp={{$timestamp}}
+
+###
+
+# 3. TIMESTAMP with OFFSET - Time calculations
+# Supported units: s (seconds), m (minutes), h (hours), d (days)
+# Format: {{$timestamp [+/-]number unit}}
+
+# One hour ago
+GET https://httpbin.org/get?startTime={{$timestamp -1 h}}
+
+# Two days from now
+GET https://httpbin.org/get?endTime={{$timestamp +2 d}}
+
+# 30 minutes ago
+GET https://httpbin.org/get?since={{$timestamp -30 m}}
+
+###
+
+# 4. DATETIME - Formatted date/time strings
+# Formats: rfc1123, iso8601
+
+# RFC 1123 format (e.g., "Mon, 21 Nov 2025 12:00:00 GMT")
+GET https://httpbin.org/headers
+If-Modified-Since: {{$datetime rfc1123}}
+
+# ISO 8601 format (e.g., "2025-11-21T12:00:00.000Z")
+POST https://httpbin.org/post
+Content-Type: application/json
+
+{
+  "createdAt": "{{$datetime iso8601}}",
+  "timestamp": "{{$datetime iso8601}}"
+}
+
+###
+
+# 5. DATETIME with OFFSET
+# Combine format and offset for time calculations
+
+# RFC 1123 format, 1 day ago
+GET https://httpbin.org/headers
+If-Modified-Since: {{$datetime rfc1123 -1 d}}
+
+# ISO 8601 format, 2 hours from now
+POST https://httpbin.org/post
+Content-Type: application/json
+
+{
+  "scheduledAt": "{{$datetime iso8601 +2 h}}",
+  "expiresAt": "{{$datetime iso8601 +7 d}}"
+}
+
+###
+
+# 6. RANDOM INTEGER - Generate random number in range
+# Usage: {{$randomInt min max}}
+
+# Random number between 1 and 100
+GET https://httpbin.org/get?userId={{$randomInt 1 100}}
+
+# Random port number
+GET https://httpbin.org/get?port={{$randomInt 8000 9000}}
+
+POST https://httpbin.org/post
+Content-Type: application/json
+
+{
+  "priority": {{$randomInt 1 5}},
+  "retryDelay": {{$randomInt 100 1000}}
+}
+
+###
+
+# 7. PROCESS ENVIRONMENT VARIABLES
+# Usage: {{$processEnv VAR_NAME}} - errors if not found
+#        {{$processEnv %VAR_NAME}} - returns empty string if not found (optional)
+
+# Required environment variable (will error if not set)
+GET https://api.example.com/data
+Authorization: Bearer {{$processEnv API_TOKEN}}
+
+# Optional environment variable (returns empty if not set)
+GET https://api.example.com/data
+X-Debug-Mode: {{$processEnv %DEBUG_MODE}}
+
+###
+
+# 8. DOTENV FILE VARIABLES
+# Usage: {{$dotenv VAR_NAME}}
+# Reads from .env file in workspace directory
+
+# API credentials from .env file
+POST https://api.example.com/login
+Content-Type: application/json
+
+{
+  "apiKey": "{{$dotenv API_KEY}}",
+  "apiSecret": "{{$dotenv API_SECRET}}"
+}
+
+# Base URL from .env
+GET {{$dotenv BASE_URL}}/users
+Authorization: Bearer {{$dotenv AUTH_TOKEN}}
+
+###
+
+# 9. COMBINED EXAMPLE - Multiple variables in one request
+POST https://httpbin.org/post
+Content-Type: application/json
+X-Request-ID: {{$guid}}
+X-Timestamp: {{$timestamp}}
+
+{
+  "id": "{{$guid}}",
+  "timestamp": {{$timestamp}},
+  "createdAt": "{{$datetime iso8601}}",
+  "expiresAt": "{{$datetime iso8601 +30 d}}",
+  "priority": {{$randomInt 1 10}},
+  "environment": "{{$processEnv %ENVIRONMENT}}",
+  "version": "{{$dotenv APP_VERSION}}"
+}
+
+###
+
+# NOTES:
+#
+# - System variables are resolved at request execution time
+# - Each {{$guid}} generates a NEW unique ID
+# - Timestamps use UTC timezone
+# - Offset syntax: [+/-]number [s|m|h|d]
+#   Examples: -1 d, +2 h, -30 m, +3600 s
+# - DateTime formats:
+#   * rfc1123: RFC 1123 format (HTTP headers)
+#   * iso8601: ISO 8601 format (JSON/API standard)
+# - ProcessEnv with % prefix is optional (no error if missing)
+# - Dotenv reads from .env file in workspace root or parent dirs
+
+###
+
+# Example .env file content:
+# API_KEY=your-api-key-here
+# API_SECRET=your-secret-here
+# BASE_URL=https://api.example.com
+# AUTH_TOKEN=your-token-here
+# APP_VERSION=1.0.0
+# ENVIRONMENT=development

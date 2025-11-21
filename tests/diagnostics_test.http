@@ -1,0 +1,113 @@
+# Diagnostics Test File
+# This file demonstrates all diagnostic features of the REST Client extension
+
+### Test 1: Valid request (should have no diagnostics)
+GET https://api.example.com/users
+Content-Type: application/json
+
+### Test 2: Invalid HTTP method (should show error)
+INVALID https://api.example.com/users
+
+### Test 3: Missing URL (should show error)
+GET
+
+### Test 4: URL without scheme (should show warning)
+GET api.example.com/users
+
+### Test 5: URL with spaces (should show error)
+GET https://api.example.com/users with spaces
+
+### Test 6: Undefined variable (should show warning)
+GET https://api.example.com/{{undefinedVariable}}/data
+
+### Test 7: System variable (should be OK, no warning)
+GET https://api.example.com/{{$guid}}
+
+### Test 8: Empty variable name (should show error)
+GET https://api.example.com/{{}}
+
+### Test 9: Unclosed variable braces (should show error)
+GET https://api.example.com/{{unclosed
+
+### Test 10: Header typo - Conten-Type (should show warning)
+POST https://api.example.com/users
+Conten-Type: application/json
+
+### Test 11: Header typo - contenttype (should show warning)
+POST https://api.example.com/users
+contenttype: application/json
+
+### Test 12: Header with spaces in name (should show error)
+GET https://api.example.com/users
+My Header: value
+
+### Test 13: Invalid header format (should show error)
+GET https://api.example.com/users
+InvalidHeaderNoColon
+
+### Test 14: Valid JSON body (should be OK)
+POST https://api.example.com/users
+Content-Type: application/json
+
+{
+  "name": "John Doe",
+  "email": "john@example.com",
+  "age": 30
+}
+
+### Test 15: Invalid JSON body (should show error)
+POST https://api.example.com/users
+Content-Type: application/json
+
+{
+  "name": "John Doe"
+  "email": "john@example.com"
+}
+
+### Test 16: POST without Content-Type header (should show warning)
+POST https://api.example.com/users
+
+{"name": "test"}
+
+### Test 17: PUT without Content-Type header (should show warning)
+PUT https://api.example.com/users/1
+
+{"name": "updated"}
+
+### Test 18: GET request (no Content-Type needed, no warning)
+GET https://api.example.com/users
+
+### Test 19: Multiple issues in one request
+INVALID api.example.com/{{undefined}}/users
+Conten-Type: application/json
+content-length: 100
+
+{invalid json}
+
+### Test 20: Valid complex request
+POST https://api.example.com/users
+Content-Type: application/json
+Authorization: Bearer {{$guid}}
+Accept: application/json
+
+{
+  "user": {
+    "name": "Alice",
+    "email": "alice@example.com",
+    "preferences": {
+      "theme": "dark",
+      "notifications": true
+    }
+  }
+}
+
+### Test 21: PATCH without Content-Type (should show warning)
+PATCH https://api.example.com/users/1
+
+{"status": "active"}
+
+### Test 22: Common header typos
+GET https://api.example.com/data
+authorisation: Bearer token
+user-agent: MyApp
+cache-control: no-cache

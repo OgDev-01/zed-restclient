@@ -1,29 +1,129 @@
 //! HTTP request executor.
 //!
-//! This module provides functionality to execute HTTP requests using the reqwest
-//! library, with support for timeouts, timing measurements, and comprehensive
-//! error handling.
+//! This module provides functionality to execute HTTP requests using the Zed
+//! extension API's built-in HTTP client, which is WASM-compatible.
+//!
+//! **IMPORTANT LIMITATION**: The Zed HTTP client API (as of v0.7.0) does not
+//! provide HTTP status codes in the response. Success is determined by whether
+//! the request completes without error. This is a fundamental limitation that
+//! affects the REST client's ability to distinguish between different HTTP
+//! response codes (200 OK vs 404 Not Found, etc.).
 
+pub mod cancellation;
 pub mod config;
 pub mod error;
+pub mod timing;
 
+pub use cancellation::{CancelError, RequestHandle, RequestTracker, SharedRequestTracker};
 pub use config::ExecutionConfig;
 pub use error::RequestError;
+pub use timing::{format_timing_breakdown, format_timing_compact, TimingCheckpoints};
 
+use crate::graphql::parser::{is_graphql_request, parse_graphql_request};
 use crate::models::request::{HttpMethod, HttpRequest};
-use crate::models::response::{HttpResponse, RequestTiming};
-use std::time::{Duration, Instant};
+use crate::models::response::HttpResponse;
+use std::sync::{Arc, Mutex};
+use zed_extension_api::http_client::{self, HttpMethod as ZedHttpMethod};
+
+/// Global request tracker for managing active requests.
+/// This is lazily initialized and shared across all requests.
+static GLOBAL_TRACKER: Mutex<Option<SharedRequestTracker>> = Mutex::new(None);
+
+/// Gets or initializes the global request tracker.
+fn get_global_tracker() -> SharedRequestTracker {
+    let mut tracker_opt = GLOBAL_TRACKER.lock().unwrap();
+    if tracker_opt.is_none() {
+        *tracker_opt = Some(SharedRequestTracker::new());
+    }
+    tracker_opt.as_ref().unwrap().clone()
+}
+
+/// Cancels a request by its ID.
+///
+/// # Arguments
+///
+/// * `request_id` - The ID of the request to cancel
+///
+/// # Returns
+///
+/// `Ok(())` if the request was successfully cancelled, or `Err(CancelError)` if
+/// the request was not found or already completed.
+///
+/// # Examples
+///
+/// ```no_run
+/// use rest_client::executor::cancel_request;
+///
+/// # fn example() -> Result<(), Box<dyn std::error::Error>> {
+/// cancel_request("req-123")?;
+/// # Ok(())
+/// # }
+/// ```
+pub fn cancel_request(request_id: &str) -> Result<(), CancelError> {
+    let tracker = get_global_tracker();
+    tracker.cancel_request(request_id)
+}
+
+/// Cancels the most recently started request.
+///
+/// This is useful for implementing a "Cancel Request" command that cancels
+/// the most recent active request without needing to know its ID.
+///
+/// # Returns
+///
+/// `Ok(request_id)` with the ID of the cancelled request, or `Err(CancelError)`
+/// if there are no active requests.
+///
+/// # Examples
+///
+/// ```no_run
+/// use rest_client::executor::cancel_most_recent_request;
+///
+/// # fn example() -> Result<(), Box<dyn std::error::Error>> {
+/// let cancelled_id = cancel_most_recent_request()?;
+/// println!("Cancelled request: {}", cancelled_id);
+/// # Ok(())
+/// # }
+/// ```
+pub fn cancel_most_recent_request() -> Result<String, CancelError> {
+    let tracker = get_global_tracker();
+    tracker.cancel_most_recent()
+}
+
+/// Gets the number of currently active requests.
+///
+/// # Returns
+///
+/// The count of active requests being tracked.
+pub fn get_active_request_count() -> usize {
+    let tracker = get_global_tracker();
+    tracker.active_count().unwrap_or(0)
+}
+
+/// Gets a list of all active request IDs.
+///
+/// # Returns
+///
+/// A vector of request IDs for all currently active requests.
+pub fn get_active_request_ids() -> Vec<String> {
+    let tracker = get_global_tracker();
+    tracker.active_request_ids().unwrap_or_default()
+}
 
 /// Executes an HTTP request and returns the response.
 ///
-/// This is the main entry point for executing HTTP requests. It builds a reqwest
-/// request from the HttpRequest model, executes it with the configured timeout,
-/// measures timing, and captures the complete response.
+/// This is the main entry point for executing HTTP requests. It builds a Zed HTTP
+/// request from the HttpRequest model, executes it, measures timing, and captures
+/// the complete response.
+///
+/// **Note**: Due to limitations in the Zed HTTP client API, the status code is
+/// always set to 200 for successful requests. Actual HTTP status codes are not
+/// available through the current API.
 ///
 /// # Arguments
 ///
 /// * `request` - The HTTP request to execute
-/// * `config` - Execution configuration (timeout, etc.)
+/// * `config` - Execution configuration (currently unused due to API limitations)
 ///
 /// # Returns
 ///
@@ -35,7 +135,7 @@ use std::time::{Duration, Instant};
 /// use rest_client::executor::{execute_request, ExecutionConfig};
 /// use rest_client::models::request::{HttpRequest, HttpMethod};
 ///
-/// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+/// # fn example() -> Result<(), Box<dyn std::error::Error>> {
 /// let request = HttpRequest::new(
 ///     "test-1".to_string(),
 ///     HttpMethod::GET,
@@ -43,86 +143,215 @@ use std::time::{Duration, Instant};
 /// );
 ///
 /// let config = ExecutionConfig::default();
-/// let response = execute_request(&request, &config).await?;
+/// let response = execute_request(&request, &config)?;
 ///
 /// println!("Status: {}", response.status_code);
 /// # Ok(())
 /// # }
 /// ```
-pub async fn execute_request(
+pub fn execute_request(
+    request: &HttpRequest,
+    _config: &ExecutionConfig,
+) -> Result<HttpResponse, RequestError> {
+    execute_request_internal(request, _config, None)
+}
+
+/// Executes an HTTP request with cancellation support.
+///
+/// This function registers the request with the global tracker and allows it to
+/// be cancelled via the `cancel_request` or `cancel_most_recent_request` functions.
+///
+/// # Arguments
+///
+/// * `request` - The HTTP request to execute
+/// * `config` - Execution configuration (currently unused due to API limitations)
+///
+/// # Returns
+///
+/// `Ok((HttpResponse, String))` with the response and request ID on success,
+/// or `Err(RequestError)` if the request fails or is cancelled.
+///
+/// # Examples
+///
+/// ```no_run
+/// use rest_client::executor::{execute_request_with_cancellation, ExecutionConfig};
+/// use rest_client::models::request::{HttpRequest, HttpMethod};
+///
+/// # fn example() -> Result<(), Box<dyn std::error::Error>> {
+/// let request = HttpRequest::new(
+///     "test-1".to_string(),
+///     HttpMethod::GET,
+///     "https://httpbin.org/get".to_string(),
+/// );
+///
+/// let config = ExecutionConfig::default();
+/// let (response, request_id) = execute_request_with_cancellation(&request, &config)?;
+///
+/// println!("Request ID: {}", request_id);
+/// println!("Status: {}", response.status_code);
+/// # Ok(())
+/// # }
+/// ```
+pub fn execute_request_with_cancellation(
     request: &HttpRequest,
     config: &ExecutionConfig,
+) -> Result<(HttpResponse, String), RequestError> {
+    // Create a request handle for tracking
+    let handle = RequestHandle::new();
+    let request_id = handle.request_id.clone();
+    let cancelled_flag = handle.cancelled.clone();
+
+    // Register with the global tracker
+    let tracker = get_global_tracker();
+    tracker
+        .register(handle)
+        .map_err(|e| RequestError::BuildError(format!("Failed to register request: {}", e)))?;
+
+    // Execute the request with cancellation support
+    let result = execute_request_internal(request, config, Some(cancelled_flag.clone()));
+
+    // Unregister from tracker when done
+    let _ = tracker.unregister(&request_id);
+
+    // Return the response along with the request ID
+    result.map(|response| (response, request_id))
+}
+
+/// Internal implementation of execute_request with optional cancellation support.
+fn execute_request_internal(
+    request: &HttpRequest,
+    _config: &ExecutionConfig,
+    cancelled_flag: Option<Arc<Mutex<bool>>>,
 ) -> Result<HttpResponse, RequestError> {
-    // Start timing the entire request
-    let start_time = Instant::now();
+    // Check if request was cancelled before starting
+    if let Some(ref flag) = cancelled_flag {
+        if *flag.lock().unwrap() {
+            return Err(RequestError::BuildError("Request cancelled".to_string()));
+        }
+    }
+
+    // Initialize timing checkpoints
+    let is_https = request.url.starts_with("https://");
+    let mut timing_checkpoints = TimingCheckpoints::new(is_https);
 
     // Validate URL and check protocol
     validate_url(&request.url)?;
 
-    // Build the reqwest client with default configuration
-    let client = reqwest::Client::builder()
-        .timeout(config.timeout_duration())
-        .build()
-        .map_err(|e| RequestError::BuildError(e.to_string()))?;
-
-    // Build the request
-    let mut req_builder = match request.method {
-        HttpMethod::GET => client.get(&request.url),
-        HttpMethod::POST => client.post(&request.url),
-        HttpMethod::PUT => client.put(&request.url),
-        HttpMethod::DELETE => client.delete(&request.url),
-        HttpMethod::PATCH => client.patch(&request.url),
-        HttpMethod::HEAD => client.head(&request.url),
-        HttpMethod::OPTIONS => client.request(reqwest::Method::OPTIONS, &request.url),
-        HttpMethod::TRACE => client.request(reqwest::Method::TRACE, &request.url),
-        HttpMethod::CONNECT => client.request(reqwest::Method::CONNECT, &request.url),
-    };
-
-    // Add headers
-    for (name, value) in &request.headers {
-        req_builder = req_builder.header(name, value);
-    }
-
-    // Add body if present
-    if let Some(body) = &request.body {
-        req_builder = req_builder.body(body.clone());
-    }
-
-    // Build the final request
-    let req = req_builder
-        .build()
-        .map_err(|e| RequestError::BuildError(e.to_string()))?;
-
-    // Execute the request with timeout
-    let response = tokio::time::timeout(config.timeout_duration(), client.execute(req))
-        .await
-        .map_err(|_| RequestError::Timeout)??;
-
-    // Measure total duration
-    let total_duration = start_time.elapsed();
-
-    // Extract status information
-    let status_code = response.status().as_u16();
-    let status_text = response
-        .status()
-        .canonical_reason()
-        .unwrap_or("Unknown")
-        .to_string();
-
-    // Extract headers
-    let mut headers = std::collections::HashMap::new();
-    for (name, value) in response.headers() {
-        if let Ok(value_str) = value.to_str() {
-            headers.insert(name.to_string(), value_str.to_string());
+    // Check cancellation again
+    if let Some(ref flag) = cancelled_flag {
+        if *flag.lock().unwrap() {
+            return Err(RequestError::BuildError("Request cancelled".to_string()));
         }
     }
 
-    // Read response body
-    let body_bytes = response
-        .bytes()
-        .await
-        .map_err(|e| RequestError::NetworkError(e.to_string()))?
-        .to_vec();
+    // Process GraphQL requests
+    let (processed_body, processed_headers) = if let Some(ref body) = request.body {
+        let content_type = request.content_type();
+        if is_graphql_request(body, content_type) {
+            process_graphql_request(body, &request.headers)?
+        } else {
+            (request.body.clone(), request.headers.clone())
+        }
+    } else {
+        (request.body.clone(), request.headers.clone())
+    };
+
+    // Convert our HttpMethod to Zed's HttpMethod
+    let method = match request.method {
+        HttpMethod::GET => ZedHttpMethod::Get,
+        HttpMethod::POST => ZedHttpMethod::Post,
+        HttpMethod::PUT => ZedHttpMethod::Put,
+        HttpMethod::DELETE => ZedHttpMethod::Delete,
+        HttpMethod::PATCH => ZedHttpMethod::Patch,
+        HttpMethod::HEAD => ZedHttpMethod::Head,
+        HttpMethod::OPTIONS => ZedHttpMethod::Options,
+        HttpMethod::TRACE => {
+            return Err(RequestError::UnsupportedMethod(
+                "TRACE method is not supported by Zed HTTP client".to_string(),
+            ))
+        }
+        HttpMethod::CONNECT => {
+            return Err(RequestError::UnsupportedMethod(
+                "CONNECT method is not supported by Zed HTTP client".to_string(),
+            ))
+        }
+    };
+
+    // Mark client start (after validation)
+    timing_checkpoints.mark_client_start();
+
+    // Build the request using Zed's HTTP client API
+    let mut req_builder = http_client::HttpRequest::builder()
+        .method(method)
+        .url(&request.url);
+
+    // Add headers (use processed headers for GraphQL)
+    for (name, value) in &processed_headers {
+        req_builder = req_builder.header(name, value);
+    }
+
+    // Add body if present (use processed body for GraphQL)
+    if let Some(body) = &processed_body {
+        req_builder = req_builder.body(body.as_bytes().to_vec());
+    }
+
+    // Check cancellation before building
+    if let Some(ref flag) = cancelled_flag {
+        if *flag.lock().unwrap() {
+            return Err(RequestError::BuildError("Request cancelled".to_string()));
+        }
+    }
+
+    // Build the final request
+    let http_request = req_builder
+        .build()
+        .map_err(|e| RequestError::BuildError(e))?;
+
+    // Check cancellation before executing
+    if let Some(ref flag) = cancelled_flag {
+        if *flag.lock().unwrap() {
+            return Err(RequestError::BuildError("Request cancelled".to_string()));
+        }
+    }
+
+    // Mark when request is about to be sent
+    timing_checkpoints.mark_request_sent();
+
+    // Execute the request
+    let response = http_request
+        .fetch()
+        .map_err(|e| RequestError::NetworkError(e))?;
+
+    // Mark when first byte received (response arrived)
+    timing_checkpoints.mark_first_byte_received();
+
+    // Check cancellation after execution
+    if let Some(ref flag) = cancelled_flag {
+        if *flag.lock().unwrap() {
+            return Err(RequestError::BuildError("Request cancelled".to_string()));
+        }
+    }
+
+    // Mark when response is completely received
+    timing_checkpoints.mark_response_complete();
+
+    // Convert timing checkpoints to RequestTiming
+    let timing = timing_checkpoints.to_request_timing();
+    let total_duration = timing.total();
+
+    // LIMITATION: Zed HTTP client does not provide status codes
+    // We assume 200 OK for successful requests
+    let status_code = 200u16;
+    let status_text = "OK".to_string();
+
+    // Extract headers from response
+    let mut headers = std::collections::HashMap::new();
+    for (name, value) in &response.headers {
+        headers.insert(name.clone(), value.clone());
+    }
+
+    // Get response body
+    let body_bytes = response.body.clone();
 
     // Calculate response size (headers + body)
     let headers_size: usize = headers
@@ -130,21 +359,6 @@ pub async fn execute_request(
         .map(|(k, v)| k.len() + v.len() + 4) // +4 for ": " and "\r\n"
         .sum();
     let total_size = headers_size + body_bytes.len();
-
-    // Create basic timing information
-    // For MVP, we only measure total duration
-    // Detailed timing (DNS, TCP, TLS breakdown) will be added in Phase 3
-    let timing = RequestTiming {
-        dns_lookup: Duration::from_secs(0),
-        tcp_connection: Duration::from_secs(0),
-        tls_handshake: if request.url.starts_with("https://") {
-            Some(Duration::from_secs(0))
-        } else {
-            None
-        },
-        first_byte: Duration::from_secs(0),
-        download: Duration::from_secs(0),
-    };
 
     // Build and return the HttpResponse
     let mut http_response = HttpResponse::new(status_code, status_text);
@@ -155,6 +369,47 @@ pub async fn execute_request(
     http_response.size = total_size;
 
     Ok(http_response)
+}
+
+/// Processes a GraphQL request by converting it to JSON format for HTTP transport.
+///
+/// This function:
+/// 1. Parses the GraphQL query and variables
+/// 2. Converts them to a JSON object with {query: "...", variables: {...}}
+/// 3. Sets Content-Type to application/json if not already set
+///
+/// # Arguments
+///
+/// * `body` - The request body containing GraphQL query and variables
+/// * `headers` - The original request headers
+///
+/// # Returns
+///
+/// A tuple of (processed_body, processed_headers) ready for HTTP transport
+fn process_graphql_request(
+    body: &str,
+    headers: &std::collections::HashMap<String, String>,
+) -> Result<(Option<String>, std::collections::HashMap<String, String>), RequestError> {
+    // Parse the GraphQL request
+    let graphql_request = parse_graphql_request(body)
+        .map_err(|e| RequestError::BuildError(format!("GraphQL parsing error: {}", e)))?;
+
+    // Convert to JSON for HTTP transport
+    let json_body = graphql_request.to_json().map_err(|e| {
+        RequestError::BuildError(format!("Failed to serialize GraphQL request: {}", e))
+    })?;
+
+    // Ensure Content-Type is set to application/json
+    let mut processed_headers = headers.clone();
+    let has_content_type = processed_headers
+        .keys()
+        .any(|k| k.eq_ignore_ascii_case("content-type"));
+
+    if !has_content_type {
+        processed_headers.insert("Content-Type".to_string(), "application/json".to_string());
+    }
+
+    Ok((Some(json_body), processed_headers))
 }
 
 /// Validates that the URL is well-formed and uses a supported protocol.
@@ -185,7 +440,6 @@ fn validate_url(url: &str) -> Result<(), RequestError> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::request::HttpMethod;
 
     #[test]
     fn test_validate_url_valid_http() {
@@ -219,208 +473,27 @@ mod tests {
         }
     }
 
-    #[tokio::test]
-    async fn test_execute_request_get_success() {
-        let request = HttpRequest::new(
-            "test-1".to_string(),
-            HttpMethod::GET,
-            "https://httpbin.org/get".to_string(),
-        );
+    #[test]
+    fn test_global_tracker_functions() {
+        // Test getting active count (should work even with no requests)
+        let _count = get_active_request_count();
 
-        let config = ExecutionConfig::default();
-        let response = execute_request(&request, &config).await;
-
-        assert!(response.is_ok());
-        let response = response.unwrap();
-        assert_eq!(response.status_code, 200);
-        assert!(response.is_success());
-        assert!(response.duration.as_secs() < 30);
-        assert!(response.size > 0);
+        // Test getting active IDs
+        let _ids = get_active_request_ids();
+        // Either state is valid - function should not panic
     }
 
-    #[tokio::test]
-    async fn test_execute_request_post_with_json() {
-        let mut request = HttpRequest::new(
-            "test-2".to_string(),
-            HttpMethod::POST,
-            "https://httpbin.org/post".to_string(),
-        );
-
-        request.add_header("Content-Type".to_string(), "application/json".to_string());
-        request.set_body(r#"{"key": "value"}"#.to_string());
-
-        let config = ExecutionConfig::default();
-        let response = execute_request(&request, &config).await;
-
-        assert!(response.is_ok());
-        let response = response.unwrap();
-        assert_eq!(response.status_code, 200);
-        assert!(response.size > 0);
+    #[test]
+    fn test_cancel_nonexistent_request() {
+        let result = cancel_request("nonexistent-id-12345");
+        assert!(result.is_err());
+        assert!(matches!(result, Err(CancelError::NotFound(_))));
     }
 
-    #[tokio::test]
-    async fn test_execute_request_404() {
-        let request = HttpRequest::new(
-            "test-3".to_string(),
-            HttpMethod::GET,
-            "https://httpbin.org/status/404".to_string(),
-        );
-
-        let config = ExecutionConfig::default();
-        let response = execute_request(&request, &config).await;
-
-        assert!(response.is_ok());
-        let response = response.unwrap();
-        assert_eq!(response.status_code, 404);
-        assert!(response.is_client_error());
-    }
-
-    #[tokio::test]
-    async fn test_execute_request_invalid_url() {
-        let request = HttpRequest::new(
-            "test-4".to_string(),
-            HttpMethod::GET,
-            "not a valid url".to_string(),
-        );
-
-        let config = ExecutionConfig::default();
-        let response = execute_request(&request, &config).await;
-
-        assert!(response.is_err());
-        match response {
-            Err(RequestError::InvalidUrl(_)) => {}
-            _ => panic!("Expected InvalidUrl error"),
-        }
-    }
-
-    #[tokio::test]
-    async fn test_execute_request_timeout() {
-        let request = HttpRequest::new(
-            "test-5".to_string(),
-            HttpMethod::GET,
-            "https://httpbin.org/delay/5".to_string(),
-        );
-
-        // Set very short timeout
-        let config = ExecutionConfig::new(1);
-        let response = execute_request(&request, &config).await;
-
-        assert!(response.is_err());
-        match response {
-            Err(RequestError::Timeout) => {}
-            other => panic!("Expected Timeout error, got: {:?}", other),
-        }
-    }
-
-    #[tokio::test]
-    async fn test_execute_request_with_headers() {
-        let mut request = HttpRequest::new(
-            "test-6".to_string(),
-            HttpMethod::GET,
-            "https://httpbin.org/headers".to_string(),
-        );
-
-        request.add_header("X-Custom-Header".to_string(), "test-value".to_string());
-        request.add_header("User-Agent".to_string(), "REST-Client/1.0".to_string());
-
-        let config = ExecutionConfig::default();
-        let response = execute_request(&request, &config).await;
-
-        assert!(response.is_ok());
-        let response = response.unwrap();
-        assert_eq!(response.status_code, 200);
-
-        // The response should contain our headers echoed back
-        let body_str = response.body_as_string().unwrap();
-        assert!(body_str.contains("X-Custom-Header") || body_str.contains("test-value"));
-    }
-
-    #[tokio::test]
-    async fn test_execute_request_unsupported_protocol() {
-        let request = HttpRequest::new(
-            "test-7".to_string(),
-            HttpMethod::GET,
-            "ftp://example.com/file.txt".to_string(),
-        );
-
-        let config = ExecutionConfig::default();
-        let response = execute_request(&request, &config).await;
-
-        assert!(response.is_err());
-        match response {
-            Err(RequestError::UnsupportedProtocol(msg)) => {
-                assert!(msg.contains("ftp"));
-            }
-            _ => panic!("Expected UnsupportedProtocol error"),
-        }
-    }
-
-    #[tokio::test]
-    async fn test_execute_request_put() {
-        let mut request = HttpRequest::new(
-            "test-8".to_string(),
-            HttpMethod::PUT,
-            "https://httpbin.org/put".to_string(),
-        );
-
-        request.add_header("Content-Type".to_string(), "application/json".to_string());
-        request.set_body(r#"{"updated": true}"#.to_string());
-
-        let config = ExecutionConfig::default();
-        let response = execute_request(&request, &config).await;
-
-        assert!(response.is_ok());
-        let response = response.unwrap();
-        assert_eq!(response.status_code, 200);
-    }
-
-    #[tokio::test]
-    async fn test_execute_request_delete() {
-        let request = HttpRequest::new(
-            "test-9".to_string(),
-            HttpMethod::DELETE,
-            "https://httpbin.org/delete".to_string(),
-        );
-
-        let config = ExecutionConfig::default();
-        let response = execute_request(&request, &config).await;
-
-        assert!(response.is_ok());
-        let response = response.unwrap();
-        assert_eq!(response.status_code, 200);
-    }
-
-    #[tokio::test]
-    async fn test_response_timing_populated() {
-        let request = HttpRequest::new(
-            "test-10".to_string(),
-            HttpMethod::GET,
-            "https://httpbin.org/get".to_string(),
-        );
-
-        let config = ExecutionConfig::default();
-        let response = execute_request(&request, &config).await.unwrap();
-
-        // Total duration should be non-zero
-        assert!(response.duration.as_millis() > 0);
-
-        // TLS handshake should be present for HTTPS
-        assert!(response.timing.tls_handshake.is_some());
-    }
-
-    #[tokio::test]
-    async fn test_response_size_calculated() {
-        let request = HttpRequest::new(
-            "test-11".to_string(),
-            HttpMethod::GET,
-            "https://httpbin.org/get".to_string(),
-        );
-
-        let config = ExecutionConfig::default();
-        let response = execute_request(&request, &config).await.unwrap();
-
-        // Size should include both headers and body
-        assert!(response.size > 0);
-        assert!(response.size >= response.body.len());
-    }
+    // Note: Integration tests that actually make HTTP requests cannot be run
+    // in a standard cargo test environment because:
+    // 1. They require the Zed WASM runtime
+    // 2. The http_client module is only available in the WASM context
+    //
+    // These tests would need to be performed manually within Zed itself.
 }

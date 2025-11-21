@@ -1,0 +1,113 @@
+# Authentication Examples for REST Client
+# This file demonstrates various authentication methods supported by the extension
+
+### Basic Authentication - Using Header
+# Standard Basic authentication with username and password
+GET https://httpbin.org/basic-auth/user/passwd
+Authorization: Basic dXNlcjpwYXNzd2Q=
+
+### Basic Authentication - Using Comment Directive
+# Alternative syntax using @basic comment directive
+# @basic user passwd
+GET https://httpbin.org/basic-auth/user/passwd
+
+### Basic Authentication - With Variables
+# Using environment variables for credentials
+# Configure these in .http-client-env.json:
+# {
+#   "dev": {
+#     "username": "{{$processEnv API_USER}}",
+#     "password": "{{$processEnv API_PASSWORD}}"
+#   }
+# }
+# @basic {{username}} {{password}}
+GET https://httpbin.org/basic-auth/myuser/mypass
+
+### Bearer Token Authentication - Using Header
+# Standard Bearer token authentication
+GET https://httpbin.org/bearer
+Authorization: Bearer mySecretToken123
+
+### Bearer Token Authentication - Using Comment Directive
+# Alternative syntax using @bearer comment directive
+# @bearer mySecretToken123
+GET https://httpbin.org/bearer
+
+### Bearer Token Authentication - With Variables
+# Using environment variables for tokens
+# Configure in .http-client-env.json:
+# {
+#   "dev": {
+#     "apiToken": "{{$processEnv API_TOKEN}}"
+#   }
+# }
+GET https://httpbin.org/bearer
+Authorization: Bearer {{apiToken}}
+
+### JWT Token Authentication
+# Bearer authentication with JWT token
+# @bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c
+GET https://api.example.com/protected/resource
+
+### Basic Auth with Special Characters
+# Demonstrates handling of special characters in credentials
+# Username: user@example.com
+# Password: p@ss:w0rd!
+GET https://httpbin.org/basic-auth/user@example.com/p@ss:w0rd!
+Authorization: Basic dXNlckBleGFtcGxlLmNvbTpwQHNzOncwcmQh
+
+### POST Request with Authentication
+# Authentication works with any HTTP method
+POST https://httpbin.org/post
+Authorization: Bearer mytoken123
+Content-Type: application/json
+
+{
+  "name": "John Doe",
+  "email": "john@example.com"
+}
+
+### Multiple Headers with Authentication
+# Authentication header works alongside other headers
+GET https://httpbin.org/headers
+Authorization: Bearer abc123
+Accept: application/json
+User-Agent: REST-Client/1.0
+X-Custom-Header: custom-value
+
+### Environment-Specific Authentication
+# Switch between dev/staging/prod environments
+# Each environment can have different credentials
+# Use "rest-client: switch environment" command to change
+
+# Development environment
+# @bearer {{devToken}}
+GET https://dev-api.example.com/users
+
+###
+
+# Production environment
+# @bearer {{prodToken}}
+GET https://api.example.com/users
+
+### Security Best Practices
+# IMPORTANT: Never commit real credentials to version control!
+#
+# Recommended approaches:
+# 1. Use environment variables: {{$processEnv API_KEY}}
+# 2. Use .http-client-env.json (add to .gitignore)
+# 3. Use variables that reference process environment
+#
+# Example .http-client-env.json:
+# {
+#   "dev": {
+#     "apiToken": "{{$processEnv DEV_API_TOKEN}}",
+#     "username": "{{$processEnv DEV_USERNAME}}",
+#     "password": "{{$processEnv DEV_PASSWORD}}"
+#   },
+#   "production": {
+#     "apiToken": "{{$processEnv PROD_API_TOKEN}}",
+#     "username": "{{$processEnv PROD_USERNAME}}",
+#     "password": "{{$processEnv PROD_PASSWORD}}"
+#   }
+# }

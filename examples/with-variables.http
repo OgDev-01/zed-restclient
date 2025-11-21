@@ -1,0 +1,400 @@
+### Comprehensive Variable Examples for REST Client
+# This file demonstrates ALL variable types and features in one place
+# Use this as a complete reference for variable capabilities
+
+###
+
+# =============================================================================
+# SECTION 1: SYSTEM VARIABLES
+# =============================================================================
+# System variables start with $ and are dynamically generated at runtime
+
+### 1.1 GUID - Generate unique identifiers
+POST https://httpbin.org/post
+Content-Type: application/json
+X-Request-ID: {{$guid}}
+X-Correlation-ID: {{$guid}}
+
+{
+  "id": "{{$guid}}",
+  "sessionId": "{{$guid}}",
+  "note": "Each {{$guid}} generates a NEW unique UUID"
+}
+
+###
+
+### 1.2 TIMESTAMP - Unix timestamps
+# Get current timestamp
+GET https://httpbin.org/get?timestamp={{$timestamp}}
+
+# Timestamp with offsets (units: s, m, h, d)
+GET https://httpbin.org/get?since={{$timestamp -1 d}}&until={{$timestamp +1 h}}
+
+###
+
+### 1.3 DATETIME - Formatted date/time strings
+# RFC 1123 format (HTTP headers)
+GET https://httpbin.org/headers
+If-Modified-Since: {{$datetime rfc1123}}
+If-Unmodified-Since: {{$datetime rfc1123 -7 d}}
+
+# ISO 8601 format (JSON/APIs)
+POST https://httpbin.org/post
+Content-Type: application/json
+
+{
+  "createdAt": "{{$datetime iso8601}}",
+  "scheduledAt": "{{$datetime iso8601 +2 h}}",
+  "expiresAt": "{{$datetime iso8601 +30 d}}"
+}
+
+###
+
+### 1.4 RANDOM INT - Generate random numbers
+POST https://httpbin.org/post
+Content-Type: application/json
+
+{
+  "userId": {{$randomInt 1000 9999}},
+  "priority": {{$randomInt 1 5}},
+  "retryDelay": {{$randomInt 100 1000}},
+  "port": {{$randomInt 8000 9000}}
+}
+
+###
+
+### 1.5 PROCESS ENV - Read from environment variables
+# Required variable (errors if not set)
+GET https://httpbin.org/bearer
+Authorization: Bearer {{$processEnv API_TOKEN}}
+
+# Optional variable (empty string if not set, use % prefix)
+GET https://httpbin.org/get
+X-Debug-Mode: {{$processEnv %DEBUG_MODE}}
+X-Environment: {{$processEnv %ENVIRONMENT}}
+
+###
+
+### 1.6 DOTENV - Read from .env file
+# Reads from .env file in workspace or parent directories
+POST https://httpbin.org/post
+Content-Type: application/json
+Authorization: Bearer {{$dotenv AUTH_TOKEN}}
+
+{
+  "apiKey": "{{$dotenv API_KEY}}",
+  "environment": "{{$dotenv ENVIRONMENT}}",
+  "version": "{{$dotenv APP_VERSION}}"
+}
+
+###
+
+# =============================================================================
+# SECTION 2: ENVIRONMENT VARIABLES
+# =============================================================================
+# Variables defined in .http-client-env.json
+# Switch environments with: /switch-environment [environment-name]
+
+### 2.1 Basic Environment Variables
+# These resolve based on the active environment (dev/staging/production)
+GET {{baseUrl}}/api/{{apiVersion}}/users
+Authorization: Bearer {{apiKey}}
+Content-Type: {{contentType}}
+User-Agent: {{userAgent}}
+
+###
+
+### 2.2 Environment-Specific Behavior
+# The same request behaves differently based on active environment
+# - dev: hits localhost:3000
+# - staging: hits staging.api.example.com
+# - production: hits api.example.com (with $processEnv for apiKey)
+
+POST {{baseUrl}}/api/{{apiVersion}}/users
+Content-Type: {{contentType}}
+X-Debug-Mode: {{debugMode}}
+X-Timeout: {{timeout}}
+
+{
+  "name": "John Doe",
+  "email": "john@example.com",
+  "environment": "{{baseUrl}}"
+}
+
+###
+
+### 2.3 Shared Variables
+# Variables in $shared section are available in all environments
+GET {{baseUrl}}/api/{{apiVersion}}/status
+User-Agent: {{userAgent}}
+Accept: {{contentType}}
+
+###
+
+# =============================================================================
+# SECTION 3: NESTED VARIABLE RESOLUTION
+# =============================================================================
+# Variables can reference other variables (including system variables)
+
+### 3.1 Environment Variables Referencing System Variables
+# The production environment uses: "apiKey": "{{$processEnv PROD_API_KEY}}"
+# When you use {{apiKey}} in production, it resolves the $processEnv
+
+POST {{baseUrl}}/api/secure
+Authorization: Bearer {{apiKey}}
+X-Request-ID: {{$guid}}
+X-Timestamp: {{$timestamp}}
+
+{
+  "requestId": "{{$guid}}",
+  "timestamp": {{$timestamp}}
+}
+
+###
+
+### 3.2 Multi-Level Variable References
+# Environment might define: "fullEndpoint": "{{baseUrl}}{{apiPath}}"
+# Where apiPath is: "/api/{{apiVersion}}"
+# This creates a chain: fullEndpoint → baseUrl + apiPath → apiVersion
+
+GET {{baseUrl}}/api/{{apiVersion}}/data
+Content-Type: {{contentType}}
+
+###
+
+# =============================================================================
+# SECTION 4: VARIABLE PRECEDENCE DEMONSTRATION
+# =============================================================================
+# Resolution order: System → Request → File → Environment → Shared → Empty
+
+### 4.1 Understanding Priority
+POST https://httpbin.org/post
+Content-Type: application/json
+
+{
+  "systemVar": "{{$guid}}",
+  "envVar": "{{baseUrl}}",
+  "sharedVar": "{{apiVersion}}",
+  "undefinedVar": "{{thisDoesNotExist}}",
+  "note": "Undefined variables resolve to empty string with warning"
+}
+
+###
+
+# =============================================================================
+# SECTION 5: COMBINING ALL VARIABLE TYPES
+# =============================================================================
+
+### 5.1 Real-World Example - User Registration
+POST {{baseUrl}}/api/{{apiVersion}}/users/register
+Content-Type: {{contentType}}
+Authorization: Bearer {{apiKey}}
+X-Request-ID: {{$guid}}
+X-Timestamp: {{$timestamp}}
+X-Client-Version: {{userAgent}}
+
+{
+  "userId": "{{$guid}}",
+  "username": "test_user_{{$randomInt 1000 9999}}",
+  "email": "test{{$randomInt 100 999}}@example.com",
+  "registeredAt": "{{$datetime iso8601}}",
+  "environment": "{{baseUrl}}",
+  "apiVersion": "{{apiVersion}}",
+  "expiresAt": "{{$datetime iso8601 +365 d}}"
+}
+
+###
+
+### 5.2 Real-World Example - Time-Based Query
+GET {{baseUrl}}/api/{{apiVersion}}/analytics
+Authorization: Bearer {{apiKey}}
+Content-Type: {{contentType}}
+X-Request-ID: {{$guid}}
+
+{
+  "startDate": "{{$datetime iso8601 -30 d}}",
+  "endDate": "{{$datetime iso8601}}",
+  "timezone": "UTC",
+  "granularity": "daily",
+  "metrics": ["views", "clicks", "conversions"]
+}
+
+###
+
+### 5.3 Real-World Example - File Upload with Metadata
+POST {{baseUrl}}/api/{{apiVersion}}/files/upload
+Authorization: Bearer {{apiKey}}
+Content-Type: multipart/form-data
+X-Upload-ID: {{$guid}}
+X-Upload-Time: {{$timestamp}}
+
+{
+  "fileId": "{{$guid}}",
+  "uploadedAt": "{{$datetime iso8601}}",
+  "uploadedBy": "{{$processEnv %USER}}",
+  "expiresAt": "{{$datetime iso8601 +7 d}}",
+  "environment": "{{baseUrl}}",
+  "metadata": {
+    "requestId": "{{$guid}}",
+    "priority": {{$randomInt 1 10}},
+    "retryCount": 0
+  }
+}
+
+###
+
+### 5.4 Real-World Example - Webhook Registration
+POST {{baseUrl}}/api/{{apiVersion}}/webhooks
+Authorization: Bearer {{apiKey}}
+Content-Type: {{contentType}}
+X-Request-ID: {{$guid}}
+
+{
+  "id": "{{$guid}}",
+  "url": "https://{{$processEnv %WEBHOOK_HOST}}/webhooks/callback",
+  "secret": "{{$processEnv WEBHOOK_SECRET}}",
+  "events": ["user.created", "user.updated", "user.deleted"],
+  "createdAt": "{{$datetime iso8601}}",
+  "expiresAt": "{{$datetime iso8601 +90 d}}",
+  "active": true
+}
+
+###
+
+# =============================================================================
+# SECTION 6: REQUEST CHAINING (Phase 3 Preview)
+# =============================================================================
+# Note: Full request chaining with captured variables is coming in Phase 3
+# This shows the syntax that will be supported
+
+### 6.1 Login Request (will capture token)
+# @name login
+POST {{baseUrl}}/api/{{apiVersion}}/auth/login
+Content-Type: {{contentType}}
+
+{
+  "username": "admin",
+  "password": "{{$processEnv ADMIN_PASSWORD}}"
+}
+
+# In Phase 3, you'll be able to capture the response like:
+# @capture authToken = $.access_token
+
+###
+
+### 6.2 Use Captured Token (Phase 3)
+# This will use the token captured from the login response
+# GET {{baseUrl}}/api/{{apiVersion}}/users/me
+# Authorization: Bearer {{authToken}}
+
+###
+
+# =============================================================================
+# SECTION 7: SECURITY BEST PRACTICES
+# =============================================================================
+
+### 7.1 ✅ GOOD - Using $processEnv for Secrets
+POST {{baseUrl}}/api/{{apiVersion}}/secure-endpoint
+Authorization: Bearer {{$processEnv PROD_API_KEY}}
+X-API-Secret: {{$processEnv API_SECRET}}
+
+###
+
+### 7.2 ✅ GOOD - Using $dotenv for Local Development
+POST {{baseUrl}}/api/{{apiVersion}}/test
+Authorization: Bearer {{$dotenv DEV_TOKEN}}
+X-Test-Key: {{$dotenv TEST_API_KEY}}
+
+###
+
+### 7.3 ❌ BAD - Hardcoding Secrets (Don't do this!)
+# POST {{baseUrl}}/api/secret
+# Authorization: Bearer sk_live_hardcoded_secret_key_12345
+
+# Instead, use environment variables in your .http-client-env.json:
+# "production": {
+#   "apiKey": "{{$processEnv PROD_API_KEY}}"
+# }
+
+###
+
+# =============================================================================
+# SECTION 8: DEBUGGING VARIABLES
+# =============================================================================
+
+### 8.1 Test Variable Resolution
+# Use this to see how all your variables resolve
+POST https://httpbin.org/post
+Content-Type: application/json
+
+{
+  "environment": {
+    "baseUrl": "{{baseUrl}}",
+    "apiKey": "{{apiKey}}",
+    "apiVersion": "{{apiVersion}}",
+    "timeout": "{{timeout}}",
+    "debugMode": "{{debugMode}}"
+  },
+  "shared": {
+    "contentType": "{{contentType}}",
+    "userAgent": "{{userAgent}}"
+  },
+  "system": {
+    "guid": "{{$guid}}",
+    "timestamp": {{$timestamp}},
+    "datetime": "{{$datetime iso8601}}",
+    "randomInt": {{$randomInt 1 100}}
+  },
+  "processEnv": {
+    "user": "{{$processEnv %USER}}",
+    "home": "{{$processEnv %HOME}}",
+    "path_exists": "{{$processEnv %PATH}}"
+  }
+}
+
+###
+
+# =============================================================================
+# NOTES AND TIPS
+# =============================================================================
+
+# Variable Syntax:
+# - Environment/File vars: {{variableName}}
+# - System vars: {{$guid}}, {{$timestamp}}, {{$datetime}}, etc.
+# - Process env (required): {{$processEnv VAR_NAME}}
+# - Process env (optional): {{$processEnv %VAR_NAME}}
+# - Dotenv vars: {{$dotenv VAR_NAME}}
+
+# Timestamp Offsets:
+# - Units: s (seconds), m (minutes), h (hours), d (days)
+# - Examples: -1 d, +2 h, -30 m, +3600 s
+
+# DateTime Formats:
+# - rfc1123: "Mon, 21 Nov 2025 12:00:00 GMT" (HTTP headers)
+# - iso8601: "2025-11-21T12:00:00.000Z" (JSON/APIs)
+
+# Environment Switching:
+# - Use: /switch-environment [environment-name]
+# - List: /switch-environment
+# - Active environment persists across requests in the same session
+
+# Variable Resolution Order:
+# 1. System variables ({{$...}})
+# 2. Request variables (captured from responses - Phase 3)
+# 3. File-level variables
+# 4. Active environment variables
+# 5. Shared variables ($shared section)
+# 6. Not found → empty string + warning
+
+# Security:
+# - NEVER commit secrets to .http-client-env.json
+# - ALWAYS use {{$processEnv}} for production secrets
+# - Use .gitignore for local environment overrides
+# - Consider using $dotenv for development secrets
+
+# Hover and Autocomplete:
+# - Hover over {{variable}} to see its current value
+# - Type {{ to trigger variable autocomplete
+# - Autocomplete shows all available variables with descriptions
+
+###

@@ -3,6 +3,7 @@
 //! This module defines configuration options for HTTP request execution,
 //! including timeout settings and other execution parameters.
 
+use crate::config::get_config;
 use serde::{Deserialize, Serialize};
 
 /// Configuration for HTTP request execution.
@@ -43,9 +44,28 @@ impl ExecutionConfig {
 }
 
 impl Default for ExecutionConfig {
-    /// Creates a default ExecutionConfig with 30 second timeout.
+    /// Creates a default ExecutionConfig using global configuration.
+    ///
+    /// Reads timeout from the global RestClientConfig settings.
     fn default() -> Self {
-        Self { timeout_secs: 30 }
+        let global_config = get_config();
+        Self {
+            timeout_secs: global_config.timeout_secs(),
+        }
+    }
+}
+
+impl ExecutionConfig {
+    /// Creates an ExecutionConfig from the global REST Client configuration.
+    ///
+    /// # Returns
+    ///
+    /// A new `ExecutionConfig` instance with settings from global config.
+    pub fn from_global_config() -> Self {
+        let global_config = get_config();
+        Self {
+            timeout_secs: global_config.timeout_secs(),
+        }
     }
 }
 
