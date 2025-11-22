@@ -38,3 +38,9 @@ Cargo.lock
 
 # Backup files
 *.bak
+
+# LSP server binaries (except the packaged one at root)
+/target/lsp-binaries/
+/*.md
+!/README.md
+!/CHANGELOG.md

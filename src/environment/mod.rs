@@ -102,6 +102,29 @@ impl EnvironmentSession {
         }
     }
 
+    /// Reloads all environments from a new Environments struct
+    ///
+    /// This replaces the entire environment configuration, useful for
+    /// reloading from file without requiring LSP restart.
+    ///
+    /// # Arguments
+    ///
+    /// * `new_environments` - The new environments to load
+    ///
+    /// # Returns
+    ///
+    /// Ok(()) if environments were successfully reloaded,
+    /// Err(EnvError) if failed to acquire write lock
+    pub fn reload_environments(&self, new_environments: Environments) -> Result<(), EnvError> {
+        let mut envs = self
+            .environments
+            .write()
+            .map_err(|_| EnvError::InvalidFormat("Failed to acquire write lock".to_string()))?;
+
+        *envs = new_environments;
+        Ok(())
+    }
+
     /// Gets a variable value from the active environment or shared variables
     ///
     /// This method follows the precedence:
@@ -285,6 +308,37 @@ mod tests {
         let final_active = session.get_active_environment_name();
         assert!(
             final_active == Some("dev".to_string()) || final_active == Some("prod".to_string())
+        );
+    }
+
+    #[test]
+    fn test_environment_session_reload() {
+        let mut envs = Environments::new();
+        envs.add_environment(Environment::new("dev"));
+
+        let session = EnvironmentSession::new(envs);
+        session.set_active_environment("dev").unwrap();
+
+        assert_eq!(
+            session.get_active_environment_name(),
+            Some("dev".to_string())
+        );
+
+        // Reload with new environments
+        let mut new_envs = Environments::new();
+        new_envs.add_environment(Environment::new("staging"));
+        new_envs.add_environment(Environment::new("prod"));
+
+        session.reload_environments(new_envs).unwrap();
+
+        // Old environment should no longer be active
+        assert!(session.get_active_environment_name().is_none());
+
+        // Should be able to set new environments
+        session.set_active_environment("prod").unwrap();
+        assert_eq!(
+            session.get_active_environment_name(),
+            Some("prod".to_string())
         );
     }
 }

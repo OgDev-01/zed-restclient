@@ -1,0 +1,419 @@
+# LSP Features Demonstration
+#
+# This file demonstrates all Language Server Protocol (LSP) features
+# available in the REST Client extension for Zed.
+#
+# ⚡ As you open this file, you should see:
+#   - Code lenses (▶ Send Request) above each request
+#   - Autocompletion when you type {{
+#   - Hover information when you mouse over variables
+#   - Real-time diagnostics for errors
+
+###############################################################################
+# 1. CODE LENSES
+###############################################################################
+# Code lenses are clickable buttons that appear above HTTP requests.
+# Click them to execute the request immediately.
+
+### Basic Code Lens
+
+GET https://api.github.com/zen
+
+### Named Code Lens
+# The @name directive gives the request a name, which appears in the code lens
+
+# @name GetGitHubUser
+GET https://api.github.com/users/octocat
+Accept: application/json
+
+# @name ListRepositories
+GET https://api.github.com/users/octocat/repos
+Accept: application/json
+
+###############################################################################
+# 2. VARIABLE AUTOCOMPLETION
+###############################################################################
+# Type {{ anywhere in a request to trigger autocompletion.
+# You'll see suggestions for environment variables, file variables, and
+# system variables.
+
+### File Variables
+# Define variables at the top of the file with @variableName = value
+
+@baseUrl = https://jsonplaceholder.typicode.com
+@userId = 1
+@postId = 1
+
+### Try Autocompletion
+# Position your cursor after {{ and press trigger to see completions:
+#
+# GET {{
+#        ^ cursor here - you'll see: baseUrl, userId, postId, $guid, $timestamp, etc.
+
+# @name GetUserById
+GET {{baseUrl}}/users/{{userId}}
+Accept: application/json
+
+# @name GetPostById
+GET {{baseUrl}}/posts/{{postId}}
+Accept: application/json
+
+###############################################################################
+# 3. SYSTEM VARIABLES AUTOCOMPLETION
+###############################################################################
+# System variables are built-in dynamic variables that generate values at runtime.
+# Type {{$ to see all system variables.
+
+### GUID Variable
+# Generates a new UUID v4 each time
+
+# @name RequestWithGUID
+POST https://httpbin.org/post
+Content-Type: application/json
+X-Request-ID: {{$guid}}
+
+{
+  "requestId": "{{$guid}}",
+  "correlationId": "{{$guid}}"
+}
+
+### Timestamp Variable
+# Current Unix timestamp in seconds
+# Try autocompletion after {{$timestamp
+
+# @name RequestWithTimestamp
+GET https://httpbin.org/get?timestamp={{$timestamp}}
+X-Timestamp: {{$timestamp}}
+
+### Timestamp with Offset
+# Supports time calculations: [+/-]number [s|m|h|d]
+
+# @name TimestampWithOffset
+GET https://httpbin.org/get?start={{$timestamp -1 d}}&end={{$timestamp +2 h}}
+
+### DateTime Variable
+# Formatted date/time strings
+# Requires format: iso8601 or rfc1123
+
+# @name DateTimeISO
+POST https://httpbin.org/post
+Content-Type: application/json
+
+{
+  "createdAt": "{{$datetime iso8601}}",
+  "expiresAt": "{{$datetime iso8601 +7 d}}"
+}
+
+# @name DateTimeRFC
+GET https://httpbin.org/headers
+If-Modified-Since: {{$datetime rfc1123 -1 d}}
+
+### Random Integer
+# Format: {{$randomInt min max}}
+
+# @name RandomInteger
+GET https://httpbin.org/get?userId={{$randomInt 1 100}}&priority={{$randomInt 1 5}}
+
+### Process Environment Variable
+# Reads from process environment
+# Use % prefix for optional (no error if undefined)
+
+# @name ProcessEnv
+GET https://api.example.com/data
+Authorization: Bearer {{$processEnv API_TOKEN}}
+X-Debug: {{$processEnv %DEBUG_MODE}}
+
+### DotEnv Variable
+# Reads from .env file in workspace
+
+# @name DotEnv
+POST https://api.example.com/login
+Content-Type: application/json
+
+{
+  "apiKey": "{{$dotenv API_KEY}}",
+  "apiSecret": "{{$dotenv API_SECRET}}"
+}
+
+###############################################################################
+# 4. HOVER INFORMATION
+###############################################################################
+# Hover your mouse over any variable to see detailed information:
+# - Current value
+# - Source (environment, file, system)
+# - Description and examples (for system variables)
+
+### Hover Examples
+# Try hovering over each variable below:
+
+# @name HoverDemo
+GET {{baseUrl}}/users/{{userId}}
+X-Request-ID: {{$guid}}
+X-Timestamp: {{$timestamp}}
+X-DateTime: {{$datetime iso8601}}
+
+# Hover over {{baseUrl}} to see:
+#   Variable: baseUrl
+#   Value: https://jsonplaceholder.typicode.com
+#   Source: file variable
+
+# Hover over {{$guid}} to see:
+#   System Variable: $guid
+#   Description: generates a new UUID v4
+#   Example value: 550e8400-e29b-41d4-a716-446655440000
+
+# Hover over {{$timestamp}} to see:
+#   System Variable: $timestamp
+#   Description: current Unix timestamp in seconds
+#   Optional: offset with format [+/-]number [s|m|h|d]
+
+###############################################################################
+# 5. ENVIRONMENT VARIABLES
+###############################################################################
+# Create .http-client-env.json in your workspace root to use environment variables.
+# The LSP will provide autocompletion and hover info for these variables.
+
+### Example Environment File Structure:
+# {
+#   "$shared": {
+#     "apiVersion": "v1",
+#     "contentType": "application/json"
+#   },
+#   "development": {
+#     "baseUrl": "http://localhost:3000",
+#     "apiKey": "dev-key-123"
+#   },
+#   "staging": {
+#     "baseUrl": "https://staging-api.example.com",
+#     "apiKey": "staging-key-456"
+#   },
+#   "production": {
+#     "baseUrl": "https://api.example.com",
+#     "apiKey": "{{$processEnv PROD_API_KEY}}"
+#   }
+# }
+
+### Switch Environment
+# Use this command to switch between environments
+
+/switch-environment development
+
+### Environment Variable Usage
+# After defining environments, type {{ to see environment variables
+
+# @name EnvironmentExample
+# GET {{baseUrl}}/api/{{apiVersion}}/users
+# Authorization: Bearer {{apiKey}}
+# Content-Type: {{contentType}}
+
+# Note: Uncomment the above request and it will use variables from your
+# .http-client-env.json file based on the active environment.
+
+###############################################################################
+# 6. SYNTAX DIAGNOSTICS
+###############################################################################
+# The LSP provides real-time error detection. Try the examples below to see
+# diagnostics in action (red/yellow squiggly lines).
+
+### Example 1: Invalid HTTP Method (ERROR)
+# Uncomment to see diagnostic:
+# FETCH https://api.example.com/users
+# Error: Invalid HTTP method 'FETCH'
+
+### Example 2: Malformed URL (ERROR)
+# Uncomment to see diagnostic:
+# GET api.example.com/users
+# Error: Invalid URL - missing protocol
+
+### Example 3: Invalid Header Format (WARNING)
+# Uncomment to see diagnostic:
+# GET https://api.example.com/users
+# Content Type: application/json
+# Error: Invalid header format - use 'Content-Type' with hyphen
+
+### Example 4: Undefined Variable (WARNING)
+# Uncomment to see diagnostic:
+# GET {{undefinedVariable}}/users
+# Warning: Undefined variable 'undefinedVariable'
+
+### Example 5: Invalid JSON (ERROR)
+# Uncomment to see diagnostic:
+# POST https://api.example.com/users
+# Content-Type: application/json
+#
+# {
+#   "name": "John"
+#   "email": "john@example.com"
+# }
+# Error: Missing comma between properties
+
+### Example 6: Missing Content-Type (WARNING)
+# Uncomment to see diagnostic:
+# POST https://api.example.com/users
+#
+# {
+#   "name": "John"
+# }
+# Warning: Request body without Content-Type header
+
+### Example 7: Invalid System Variable Syntax (ERROR)
+# Uncomment to see diagnostic:
+# GET https://api.example.com/data
+# X-Timestamp: {{$timestamp 1 d}}
+# Error: Invalid offset format - use '+1 d' or '-1 d'
+
+# Uncomment to see diagnostic:
+# GET https://api.example.com/data
+# X-DateTime: {{$datetime}}
+# Error: datetime requires format argument (iso8601 or rfc1123)
+
+###############################################################################
+# 7. VALID REQUESTS FOR TESTING
+###############################################################################
+# These are all correctly formatted requests that demonstrate LSP features
+# without errors.
+
+### Complete Example with All Features
+
+# @name CompleteExample
+POST https://httpbin.org/post
+Content-Type: application/json
+Accept: application/json
+User-Agent: REST-Client-Demo/1.0
+X-Request-ID: {{$guid}}
+X-Timestamp: {{$timestamp}}
+X-DateTime: {{$datetime iso8601}}
+
+{
+  "id": "{{$guid}}",
+  "userId": {{$randomInt 1 1000}},
+  "timestamp": {{$timestamp}},
+  "createdAt": "{{$datetime iso8601}}",
+  "expiresAt": "{{$datetime iso8601 +30 d}}",
+  "metadata": {
+    "source": "lsp-demo",
+    "version": "1.0.0"
+  }
+}
+
+###############################################################################
+# 8. INTERACTIVE EXERCISES
+###############################################################################
+# Try these exercises to practice using LSP features:
+
+### Exercise 1: Autocompletion
+# 1. Position cursor after the opening braces: GET {{
+# 2. Trigger completion (it may appear automatically)
+# 3. Select a variable from the list
+# 4. Complete the request
+
+# Your turn:
+# GET {{
+
+### Exercise 2: Hover Information
+# 1. Define a file variable: @myVar = test-value
+# 2. Use it in a request: GET https://httpbin.org/get?param={{myVar}}
+# 3. Hover over {{myVar}} to see its value
+
+@myVar = test-value
+
+# Your turn:
+# GET https://httpbin.org/get?param={{myVar}}
+
+### Exercise 3: System Variables
+# 1. Create a POST request
+# 2. Add system variables for guid, timestamp, and datetime
+# 3. Hover over each to see descriptions
+
+# Your turn:
+# POST https://httpbin.org/post
+# Content-Type: application/json
+#
+# {
+#   "id": "{{$guid}}",
+#   "timestamp": {{$timestamp}},
+#   "date": "{{$datetime iso8601}}"
+# }
+
+### Exercise 4: Error Detection
+# 1. Write a request with an invalid HTTP method
+# 2. Observe the diagnostic error (red squiggle)
+# 3. Hover over the error to see the suggestion
+# 4. Fix the error
+
+# Your turn:
+# INVALID https://api.example.com/test
+# ^ Should show error diagnostic
+
+### Exercise 5: Environment Switching
+# 1. Create .http-client-env.json with dev and prod environments
+# 2. Define a variable like "apiUrl" in each
+# 3. Use /switch-environment to switch between them
+# 4. Hover over {{apiUrl}} to see the active environment's value
+
+# Your turn:
+# /switch-environment development
+# GET {{apiUrl}}/users
+
+###############################################################################
+# 9. TIPS AND BEST PRACTICES
+###############################################################################
+
+# ✅ DO: Use descriptive variable names
+@productionUrl = https://api.example.com
+@developmentUrl = http://localhost:3000
+
+# ✅ DO: Use @name for complex requests
+# @name AuthenticateUser
+POST https://api.example.com/auth/login
+
+# ✅ DO: Use system variables for dynamic data
+X-Request-ID: {{$guid}}
+X-Timestamp: {{$timestamp}}
+
+# ✅ DO: Group related requests with section headers
+### User Management APIs
+
+# ✅ DO: Use environment variables for secrets
+# Authorization: Bearer {{apiKey}}
+# (where apiKey is defined in .http-client-env.json)
+
+# ❌ DON'T: Hardcode sensitive data
+# Authorization: Bearer sk-prod-key-12345
+
+# ❌ DON'T: Use spaces in URLs without encoding
+# GET https://api.example.com/search?q=hello world
+# Should be: GET https://api.example.com/search?q=hello%20world
+
+# ❌ DON'T: Forget Content-Type for JSON bodies
+# POST https://api.example.com/users
+# Content-Type: application/json  ← Always include this
+
+###############################################################################
+# 10. TROUBLESHOOTING
+###############################################################################
+
+# If LSP features aren't working:
+
+# 1. Check that your file has .http or .rest extension
+# 2. Verify the LSP server is running (check Zed LSP logs)
+# 3. Reload the window: Cmd+Shift+P → "Reload Window"
+# 4. Rebuild LSP server: cd rest-client && ./build-lsp.sh
+# 5. Check .http-client-env.json is valid JSON
+# 6. Ensure variables are defined before use
+
+# For more help, see: docs/LSP_FEATURES.md#troubleshooting
+
+###############################################################################
+# END OF LSP FEATURES DEMO
+###############################################################################
+
+# 🎉 You've completed the LSP features demo!
+#
+# Next steps:
+# - Create your own .http files
+# - Set up .http-client-env.json for your projects
+# - Explore examples/ directory for more use cases
+# - Read docs/LSP_FEATURES.md for detailed documentation
+#
+# Happy API testing! 🚀

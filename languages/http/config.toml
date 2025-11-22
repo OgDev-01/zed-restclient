@@ -4,37 +4,12 @@ path_suffixes = ["http", "rest"]
 line_comments = ["# ", "// "]
 block_comment = ["/*", "*/"]
 
-[brackets]
-# Curly braces for variables {{variable}}
-[brackets.curly]
-start = "{{"
-end = "}}"
-close = true
-newline = false
-
-[brackets.paren]
-start = "("
-end = ")"
-close = true
-newline = false
-
-[brackets.square]
-start = "["
-end = "]"
-close = true
-newline = false
-
-[autoclose]
-# Auto-close pairs for common patterns
-[autoclose.before]
-# Auto-close quotes and braces when typing before these characters
-pairs = [
-    { open = "\"", close = "\"" },
-    { open = "'", close = "'" },
-    { open = "{", close = "}" },
-    { open = "[", close = "]" },
-    { open = "(", close = ")" },
+# Bracket pairs for auto-closing
+brackets = [
+  { start = "{{", end = "}}", close = true, newline = false },
+  { start = "(", end = ")", close = true, newline = false },
+  { start = "[", end = "]", close = true, newline = false },
+  { start = "{", end = "}", close = true, newline = false },
+  { start = "\"", end = "\"", close = true, newline = false },
+  { start = "'", end = "'", close = true, newline = false },
 ]
-
-[code_actions]
-# Placeholder for future code actions like "Send Request"

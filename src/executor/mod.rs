@@ -14,10 +14,17 @@ pub mod config;
 pub mod error;
 pub mod timing;
 
+// Native HTTP executor for LSP server (non-WASM)
+#[cfg(feature = "lsp")]
+pub mod native;
+
 pub use cancellation::{CancelError, RequestHandle, RequestTracker, SharedRequestTracker};
 pub use config::ExecutionConfig;
 pub use error::RequestError;
 pub use timing::{format_timing_breakdown, format_timing_compact, TimingCheckpoints};
+
+#[cfg(feature = "lsp")]
+pub use native::execute_request_native;
 
 use crate::graphql::parser::{is_graphql_request, parse_graphql_request};
 use crate::models::request::{HttpMethod, HttpRequest};

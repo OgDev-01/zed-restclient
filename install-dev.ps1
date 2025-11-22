@@ -23,12 +23,35 @@ Write-ColorOutput Cyan "Detected OS: Windows"
 Write-ColorOutput Cyan "Installation directory: $EXTENSIONS_DIR"
 Write-Output ""
 
-# Build the extension
-Write-ColorOutput Yellow "🔨 Building extension..."
+# Build the LSP server first (native binary)
+Write-ColorOutput Yellow "🔨 Building LSP server..."
+cargo build --release --bin lsp-server
+
+if ($LASTEXITCODE -ne 0) {
+    Write-ColorOutput Red "❌ LSP server build failed!"
+    exit 1
+}
+
+# Check if LSP server binary was created
+$LSP_PATH = "target\release\lsp-server.exe"
+if (-not (Test-Path $LSP_PATH)) {
+    Write-ColorOutput Red "❌ LSP server binary not found after build!"
+    Write-Output "Expected: $LSP_PATH"
+    exit 1
+}
+
+# Get LSP server file size
+$LSP_SIZE = (Get-Item $LSP_PATH).Length / 1MB
+$LSP_SIZE_STR = "{0:N2} MB" -f $LSP_SIZE
+Write-ColorOutput Green "✅ LSP server built successfully! (Binary size: $LSP_SIZE_STR)"
+Write-Output ""
+
+# Build the extension (WASM)
+Write-ColorOutput Yellow "🔨 Building extension WASM..."
 cargo build --target wasm32-wasip1 --release
 
 if ($LASTEXITCODE -ne 0) {
-    Write-ColorOutput Red "❌ Build failed!"
+    Write-ColorOutput Red "❌ Extension WASM build failed!"
     exit 1
 }
 
@@ -77,6 +100,10 @@ if (Test-Path "languages") {
 # Copy WASM binary
 Copy-Item -Force $WASM_PATH "$EXTENSIONS_DIR\extension.wasm"
 Write-Output "   ✓ extension.wasm"
+
+# Copy LSP server binary
+Copy-Item -Force $LSP_PATH "$EXTENSIONS_DIR\lsp-server.exe"
+Write-Output "   ✓ lsp-server.exe"
 
 Write-Output ""
 Write-ColorOutput Green "✅ Extension installed successfully!"

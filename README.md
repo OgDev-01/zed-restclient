@@ -4,6 +4,14 @@ A powerful HTTP client extension for Zed that brings professional API testing di
 
 **Inspired by the popular VS Code REST Client extension.**
 
+## Quick Install
+
+```bash
+git clone https://github.com/ogdev-01/zed-restclient.git && cd zed-restclient && ./install-dev.sh
+```
+
+Then restart Zed (Cmd+Q and reopen).
+
 ## ✨ Key Features
 
 - **🚀 Full HTTP Support** - All HTTP methods (GET, POST, PUT, DELETE, PATCH, OPTIONS, HEAD)
@@ -16,7 +24,7 @@ A powerful HTTP client extension for Zed that brings professional API testing di
 - **⚡ Code Generation** - Generate JavaScript, Python code from your requests
 - **🌐 GraphQL Ready** - Full GraphQL query and mutation support
 - **🔧 cURL Integration** - Import cURL commands, export requests as cURL
-- **💡 Smart Editor** - Auto-complete, hover hints, real-time diagnostics via LSP
+- **💡 Smart LSP Features** - Code lenses, auto-complete, hover hints, real-time diagnostics ([Learn more](docs/LSP_FEATURES.md))
 - **📜 History Tracking** - Automatic request/response history
 
 ## 📖 Table of Contents
@@ -27,6 +35,7 @@ A powerful HTTP client extension for Zed that brings professional API testing di
 - [Documentation](#documentation)
 - [Configuration](#configuration)
 - [Examples](#examples)
+- [LSP Features](#lsp-features)
 - [Keyboard Shortcuts](#keyboard-shortcuts)
 - [Troubleshooting](#troubleshooting)
 - [Migration from VS Code](#migration-from-vs-code)
@@ -34,19 +43,46 @@ A powerful HTTP client extension for Zed that brings professional API testing di
 
 ## Installation
 
-### From Zed Extensions
+### Prerequisites
 
-1. Open Zed editor
-2. Open the command palette (`Cmd+Shift+P` on macOS, `Ctrl+Shift+P` on Linux/Windows)
-3. Search for "zed: extensions"
-4. Search for "REST Client"
-5. Click "Install"
+- Rust toolchain with `wasm32-wasip1` target
+- Cargo
 
-### Manual Installation
+### Installation Steps
 
-1. Clone this repository
-2. Navigate to the project directory
-3. Build the extension:
+**⚠️ IMPORTANT: You cannot use "Install Dev Extension" from Zed's UI.**  
+The extension requires building both WASM and a native LSP server binary.
+
+#### Quick Install (Recommended)
+
+1. Clone this repository:
+   ```bash
+   git clone https://github.com/ogdev-01/zed-restclient.git
+   cd zed-restclient
+   ```
+
+2. Run the installation script:
+   ```bash
+   ./install-dev.sh
+   ```
+
+3. **Completely quit and restart Zed** (Cmd+Q, not just close the window)
+
+4. Verify installation:
+   - Open command palette (`Cmd+Shift+P`)
+   - Type "zed: extensions"
+   - You should see "REST Client" listed
+
+#### What the Install Script Does
+
+- ✅ Builds the LSP server binary (native, ~3.8MB with `reqwest`)
+- ✅ Builds the WASM extension (~1.7MB)
+- ✅ Copies all files to Zed's extension directories (`installed/` and `work/`)
+- ✅ Sets correct permissions on the LSP server binary
+
+#### Manual Build (Advanced)
+
+If you prefer to build manually:
    ```bash
    cargo build --target wasm32-wasip1 --release
    ```
@@ -450,6 +486,52 @@ username=johndoe&password=secret
 - [Request Chaining](examples/request-chaining.http)
 - [GraphQL](examples/graphql-examples.http)
 
+## 💡 LSP Features
+
+The REST Client includes a powerful Language Server that provides intelligent editing features:
+
+### Code Lenses
+Clickable **"▶ Send Request"** buttons appear above each HTTP request. Click to execute requests instantly.
+
+```http
+▶ Send Request
+GET https://api.github.com/users/octocat
+
+# @name CreateUser
+▶ Send Request: CreateUser
+POST https://api.example.com/users
+```
+
+### Variable Autocompletion
+Type `{{` to trigger smart completions for:
+- Environment variables from `.http-client-env.json`
+- System variables (`$guid`, `$timestamp`, `$datetime`, `$randomInt`)
+- File variables defined in your `.http` file
+
+### Hover Information
+Hover over variables to see:
+- Current resolved value
+- Variable source (environment, file, system)
+- Detailed descriptions and examples
+
+### Syntax Diagnostics
+Real-time error detection for:
+- Invalid HTTP methods and malformed URLs
+- Undefined variables and typos
+- JSON syntax errors in request bodies
+- Missing or incorrect headers
+
+### Environment Switching
+Switch between dev, staging, and production environments seamlessly:
+
+```http
+/switch-environment production
+```
+
+All variable values update automatically based on the active environment.
+
+**📘 See [LSP Features Guide](docs/LSP_FEATURES.md) for complete documentation with examples and troubleshooting.**
+
 ## ⌨️ Keyboard Shortcuts
 
 Add custom shortcuts to your Zed `keymap.json`:
@@ -572,11 +654,62 @@ Contributions are welcome! Please feel free to submit issues or pull requests.
   rustup target add wasm32-wasip1
   ```
 
-### Building
+### Building the Extension
+
+Build the WASM extension:
 
 ```bash
+# Using the optimized build script (recommended)
+./build-optimized.sh
+
+# Or manually with cargo
 cargo build --target wasm32-wasip1 --release
 ```
+
+### Building the LSP Server
+
+The REST Client includes a Language Server Protocol (LSP) server for enhanced editor features like auto-completion, hover hints, and diagnostics.
+
+**Quick Build (Current Platform)**:
+
+```bash
+# macOS/Linux
+./build-lsp.sh
+
+# Windows
+.\build-lsp.ps1
+```
+
+**Cross-Platform Build**:
+
+```bash
+# Build for all supported platforms
+./build-lsp.sh --all
+
+# Build for specific platform
+./build-lsp.sh --target x86_64-apple-darwin
+```
+
+**Manual Build**:
+
+```bash
+# Build optimized release binary
+cargo build --bin lsp-server --release
+
+# Binary location:
+# - macOS/Linux: target/release/lsp-server
+# - Windows: target\release\lsp-server.exe
+```
+
+**Supported Platforms**:
+- macOS (Intel): `x86_64-apple-darwin`
+- macOS (Apple Silicon): `aarch64-apple-darwin`
+- Linux (x86_64): `x86_64-unknown-linux-gnu`
+- Windows (x86_64): `x86_64-pc-windows-msvc`
+
+**Binary Size**: ~2.8MB (optimized with LTO and stripping)
+
+For detailed build instructions, troubleshooting, and CI/CD integration, see [BUILD.md](BUILD.md).
 
 ### Testing
 

@@ -3,34 +3,41 @@ name = "REST Client"
 description = "Send HTTP requests and view responses directly in Zed. Supports .http and .rest files with variable substitution, environments, and request history."
 version = "0.1.0"
 schema_version = 1
-authors = ["REST Client Contributors"]
-repository = "https://github.com/zed-industries/zed-rest-client"
+authors = ["ogdev-01"]
+repository = "https://github.com/ogdev-01/zed-restclient"
+
+[grammars.http]
+repository = "file:///Users/ogdev/work/personal/zed-extentions/rest-client"
+commit = "7c3c3cb2d10276b920925e96d93b384ed6722725"
+path = "languages/http"
+
+languages = ["languages/http"]
+
+[language_servers.rest-client-lsp]
+name = "REST Client LSP"
+languages = ["HTTP"]
 
 [slash_commands.send-request]
-description = "Send an HTTP request from the current selection"
+description = "Execute an HTTP request and display the response"
+tooltip = "Select an HTTP request and execute it"
+requires_argument = false
+
+[slash_commands.switch-environment]
+description = "Switch between different environment configurations"
+tooltip = "Change the active environment for variable substitution"
+requires_argument = false
+
+[slash_commands.generate-code]
+description = "Generate code snippets from HTTP requests"
+tooltip = "Convert HTTP request to code in various languages"
 requires_argument = false
 
 [slash_commands.paste-curl]
-description = "Convert a cURL command to HTTP request format"
-requires_argument = true
-
-[slash_commands.copy-as-curl]
-description = "Convert an HTTP request to a cURL command"
+description = "Convert cURL command to HTTP request format"
+tooltip = "Paste a cURL command and convert it to .http format"
 requires_argument = false
 
-[languages.http]
-path = "languages/http"
-
-# Settings schema for the REST Client extension
-# Users can configure these settings in their Zed settings.json under "rest-client"
-[settings]
-timeout = { description = "Request timeout in milliseconds (default: 30000)", type = "integer", default = 30000 }
-followRedirects = { description = "Automatically follow HTTP redirects (default: true)", type = "boolean", default = true }
-maxRedirects = { description = "Maximum number of redirects to follow (default: 10)", type = "integer", default = 10 }
-validateSSL = { description = "Validate SSL/TLS certificates (default: true)", type = "boolean", default = true }
-responsePane = { description = "Position of response pane: 'right', 'below', or 'tab' (default: 'right')", type = "string", default = "right" }
-historyLimit = { description = "Maximum number of requests to keep in history (default: 1000)", type = "integer", default = 1000 }
-previewResponseInTab = { description = "Open responses in a new tab instead of a pane (default: false)", type = "boolean", default = false }
-environmentFile = { description = "Path to environment variables file (default: '.http-client-env.json')", type = "string", default = ".http-client-env.json" }
-excludeHostsFromProxy = { description = "List of hostnames to exclude from proxy settings (default: [])", type = "array", default = [] }
-defaultHeaders = { description = "Default headers to include in all requests (default: {'User-Agent': 'Zed-REST-Client/1.0'})", type = "object", default = {} }
+[slash_commands.copy-as-curl]
+description = "Copy HTTP request as cURL command"
+tooltip = "Convert HTTP request to cURL command format"
+requires_argument = false

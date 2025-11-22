@@ -1,6 +1,7 @@
 #!/bin/bash
 
-set -e  # Exit on error
+# Don't exit on error for cp commands (files might be identical)
+set +e
 
 # Colors for output
 GREEN='\033[0;32m'
@@ -14,10 +15,12 @@ echo ""
 
 # Detect OS and set extensions directory
 if [[ "$OSTYPE" == "darwin"* ]]; then
-    EXTENSIONS_DIR="$HOME/Library/Application Support/Zed/extensions/installed/rest-client"
+    INSTALLED_DIR="$HOME/Library/Application Support/Zed/extensions/installed/rest-client"
+    WORK_DIR="$HOME/Library/Application Support/Zed/extensions/work/rest-client"
     OS_NAME="macOS"
 elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
-    EXTENSIONS_DIR="$HOME/.local/share/zed/extensions/installed/rest-client"
+    INSTALLED_DIR="$HOME/.local/share/zed/extensions/installed/rest-client"
+    WORK_DIR="$HOME/.local/share/zed/extensions/work/rest-client"
     OS_NAME="Linux"
 else
     echo -e "${RED}❌ Unsupported OS: $OSTYPE${NC}"
@@ -26,15 +29,36 @@ else
 fi
 
 echo -e "${BLUE}Detected OS:${NC} $OS_NAME"
-echo -e "${BLUE}Installation directory:${NC} $EXTENSIONS_DIR"
+echo -e "${BLUE}Installed directory:${NC} $INSTALLED_DIR"
+echo -e "${BLUE}Work directory:${NC} $WORK_DIR"
 echo ""
 
-# Build the extension
-echo -e "${YELLOW}🔨 Building extension...${NC}"
+# Build the LSP server first (native binary)
+echo -e "${YELLOW}🔨 Building LSP server...${NC}"
+cargo build --release --bin lsp-server --features lsp
+
+if [ $? -ne 0 ]; then
+    echo -e "${RED}❌ LSP server build failed!${NC}"
+    exit 1
+fi
+
+# Check if LSP server binary was created
+if [ ! -f "target/release/lsp-server" ]; then
+    echo -e "${RED}❌ LSP server binary not found after build!${NC}"
+    echo "Expected: target/release/lsp-server"
+    exit 1
+fi
+
+LSP_SIZE=$(du -h target/release/lsp-server | cut -f1)
+echo -e "${GREEN}✅ LSP server built successfully!${NC} (Binary size: $LSP_SIZE)"
+echo ""
+
+# Build the extension (WASM)
+echo -e "${YELLOW}🔨 Building extension WASM...${NC}"
 cargo build --target wasm32-wasip1 --release
 
 if [ $? -ne 0 ]; then
-    echo -e "${RED}❌ Build failed!${NC}"
+    echo -e "${RED}❌ Extension WASM build failed!${NC}"
     exit 1
 fi
 
@@ -50,36 +74,65 @@ WASM_SIZE=$(du -h target/wasm32-wasip1/release/rest_client.wasm | cut -f1)
 echo -e "${GREEN}✅ Build successful!${NC} (WASM size: $WASM_SIZE)"
 echo ""
 
-# Create extension directory
-echo -e "${YELLOW}📁 Creating extension directory...${NC}"
-mkdir -p "$EXTENSIONS_DIR"
+# Create extension directories
+echo -e "${YELLOW}📁 Creating extension directories...${NC}"
+mkdir -p "$INSTALLED_DIR"
+mkdir -p "$WORK_DIR"
 
 # Backup existing installation if it exists
-if [ -f "$EXTENSIONS_DIR/extension.wasm" ]; then
-    BACKUP_DIR="$EXTENSIONS_DIR.backup.$(date +%Y%m%d_%H%M%S)"
+if [ -f "$INSTALLED_DIR/extension.wasm" ]; then
+    BACKUP_DIR="$INSTALLED_DIR.backup.$(date +%Y%m%d_%H%M%S)"
     echo -e "${YELLOW}⚠️  Backing up existing installation to:${NC}"
     echo "   $BACKUP_DIR"
-    cp -r "$EXTENSIONS_DIR" "$BACKUP_DIR"
+    cp -r "$INSTALLED_DIR" "$BACKUP_DIR"
 fi
 
-# Copy files
-echo -e "${YELLOW}📋 Copying extension files...${NC}"
+# Copy files to both directories
+echo -e "${YELLOW}📋 Copying extension files to installed directory...${NC}"
 
 # Copy extension manifest
-cp extension.toml "$EXTENSIONS_DIR/"
+cp -f extension.toml "$INSTALLED_DIR/"
 echo "   ✓ extension.toml"
 
 # Copy language configuration
 if [ -d "languages" ]; then
-    cp -r languages "$EXTENSIONS_DIR/"
+    cp -r languages "$INSTALLED_DIR/"
     echo "   ✓ languages/"
 else
     echo -e "${YELLOW}   ⚠️  languages/ directory not found (syntax highlighting may not work)${NC}"
 fi
 
 # Copy WASM binary
-cp target/wasm32-wasip1/release/rest_client.wasm "$EXTENSIONS_DIR/extension.wasm"
+cp -f target/wasm32-wasip1/release/rest_client.wasm "$INSTALLED_DIR/extension.wasm"
 echo "   ✓ extension.wasm"
+
+# Copy LSP server binary
+cp -f target/release/lsp-server "$INSTALLED_DIR/"
+chmod +x "$INSTALLED_DIR/lsp-server"
+echo "   ✓ lsp-server"
+
+echo ""
+echo -e "${YELLOW}📋 Copying extension files to work directory...${NC}"
+
+# Copy essential files to work directory
+cp -f extension.toml "$WORK_DIR/"
+echo "   ✓ extension.toml"
+
+cp -rf languages "$WORK_DIR/"
+echo "   ✓ languages/"
+
+cp -f target/wasm32-wasip1/release/rest_client.wasm "$WORK_DIR/extension.wasm"
+echo "   ✓ extension.wasm"
+
+cp -f target/release/lsp-server "$WORK_DIR/"
+chmod +x "$WORK_DIR/lsp-server"
+echo "   ✓ lsp-server"
+
+# Copy grammars if they exist in installed directory
+if [ -d "$INSTALLED_DIR/grammars" ]; then
+    cp -r "$INSTALLED_DIR/grammars" "$WORK_DIR/"
+    echo "   ✓ grammars/"
+fi
 
 echo ""
 echo -e "${GREEN}✅ Extension installed successfully!${NC}"
@@ -87,9 +140,14 @@ echo ""
 
 # Verify installation
 echo -e "${BLUE}📊 Installation Summary:${NC}"
-echo "   Location: $EXTENSIONS_DIR"
+echo ""
+echo "   Installed directory: $INSTALLED_DIR"
 echo "   Files installed:"
-ls -lh "$EXTENSIONS_DIR" | tail -n +2 | awk '{print "     - " $9 " (" $5 ")"}'
+ls -lh "$INSTALLED_DIR" | tail -n +2 | awk '{print "     - " $9 " (" $5 ")"}'
+echo ""
+echo "   Work directory: $WORK_DIR"
+echo "   Files installed:"
+ls -lh "$WORK_DIR" | tail -n +2 | awk '{print "     - " $9 " (" $5 ")"}'
 
 echo ""
 echo -e "${YELLOW}⚠️  IMPORTANT:${NC}"

@@ -74,6 +74,8 @@ pub mod formatter;
 pub mod graphql;
 pub mod history;
 pub mod language_server;
+#[cfg(feature = "lsp")]
+pub mod lsp_server;
 pub mod models;
 pub mod parser;
 pub mod ui;
@@ -106,10 +108,36 @@ impl zed::Extension for RestClientExtension {
 
     fn language_server_command(
         &mut self,
-        _language_server_id: &zed::LanguageServerId,
-        _worktree: &zed::Worktree,
+        language_server_id: &zed::LanguageServerId,
+        worktree: &zed::Worktree,
     ) -> zed::Result<zed::Command> {
-        Err("Language server not yet implemented".to_string())
+        // The lsp-server binary should be in the extension directory
+        // Zed extensions run from their installation directory, so we can use a relative path
+        // The binary is installed alongside extension.wasm
+
+        // Determine binary name based on platform
+        let binary_name = if cfg!(target_os = "windows") {
+            "lsp-server.exe"
+        } else {
+            "lsp-server"
+        };
+
+        // First try to find it on PATH (in case user has it installed)
+        let command = worktree.which(binary_name).unwrap_or_else(|| {
+            // Fallback to relative path in extension directory
+            // This works because Zed runs the extension from its install directory
+            if cfg!(target_os = "windows") {
+                ".\\lsp-server.exe".to_string()
+            } else {
+                "./lsp-server".to_string()
+            }
+        });
+
+        Ok(zed::Command {
+            command,
+            args: vec![],
+            env: vec![],
+        })
     }
 
     fn language_server_initialization_options(
@@ -132,11 +160,34 @@ impl zed::Extension for RestClientExtension {
             "paste-curl" => self.handle_paste_curl(args),
             "copy-as-curl" => self.handle_copy_as_curl(args),
             "send-request" => {
-                // Get the text from args (passed by Zed from selection/context)
-                let request_text = args.join("\n");
+                // Argument patterns supported:
+                // 1 arg: selection-only (HTTP request text)
+                // 2 args: full editor text, cursor byte offset -> attempt block extraction
+                // If extraction fails, fall back to treating first arg as direct request text.
+                if args.is_empty() {
+                    return Err("Send Request: no input provided. Supply selection text or file content + cursor.".to_string());
+                }
 
-                if request_text.is_empty() {
-                    return Err("No request text provided. Please select an HTTP request or provide request text.".to_string());
+                let (request_text, _start_line) = if args.len() >= 2 {
+                    // Try cursor-based extraction
+                    if let Ok(cursor_pos) = args[1].parse::<usize>() {
+                        let editor_text = &args[0];
+                        match crate::commands::extract_request_at_cursor(editor_text, cursor_pos) {
+                            Ok((extracted, start_line)) => (extracted, start_line),
+                            Err(_) => (editor_text.clone(), 0),
+                        }
+                    } else {
+                        (args[0].clone(), 0)
+                    }
+                } else {
+                    (args[0].clone(), 0)
+                };
+
+                if request_text.trim().is_empty() {
+                    return Err(
+                        "Send Request: resolved request text is empty after extraction."
+                            .to_string(),
+                    );
                 }
 
                 // Parse the request
