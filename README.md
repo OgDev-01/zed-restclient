@@ -45,8 +45,31 @@ Then restart Zed (Cmd+Q and reopen).
 
 ### Prerequisites
 
-- Rust toolchain with `wasm32-wasip1` target
-- Cargo
+Before installing the extension, you need to have Rust installed on your system.
+
+#### Install Rust
+
+If you don't have Rust installed, install it using [rustup](https://rustup.rs/):
+
+```bash
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+```
+
+For Windows, download and run the installer from [rustup.rs](https://rustup.rs/).
+
+After installation, add the WebAssembly target:
+
+```bash
+rustup target add wasm32-wasip1
+```
+
+**Verify your installation:**
+```bash
+rustc --version
+cargo --version
+```
+
+You should see version numbers for both commands.
 
 ### Installation Steps
 
