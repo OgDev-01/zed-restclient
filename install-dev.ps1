@@ -23,6 +23,58 @@ Write-ColorOutput Cyan "Detected OS: Windows"
 Write-ColorOutput Cyan "Installation directory: $EXTENSIONS_DIR"
 Write-Output ""
 
+# Check prerequisites
+Write-ColorOutput Yellow "🔍 Checking prerequisites..."
+
+# Check if Rust is installed
+if (-not (Get-Command rustc -ErrorAction SilentlyContinue)) {
+    Write-ColorOutput Red "❌ Rust is not installed!"
+    Write-Output ""
+    Write-Output "Please install Rust first:"
+    Write-Output "  Download from: https://rustup.rs/"
+    Write-Output ""
+    Write-Output "After installation, restart your terminal and run this script again."
+    exit 1
+}
+
+# Check if cargo is installed
+if (-not (Get-Command cargo -ErrorAction SilentlyContinue)) {
+    Write-ColorOutput Red "❌ Cargo is not installed!"
+    Write-Output ""
+    Write-Output "Please install Rust (which includes Cargo):"
+    Write-Output "  Download from: https://rustup.rs/"
+    Write-Output ""
+    Write-Output "After installation, restart your terminal and run this script again."
+    exit 1
+}
+
+Write-ColorOutput Green "✓ Rust installed: $(rustc --version)"
+Write-ColorOutput Green "✓ Cargo installed: $(cargo --version)"
+
+# Check if wasm32-wasip1 target is installed
+$targetList = rustup target list | Select-String "wasm32-wasip1"
+if ($targetList -notmatch "installed") {
+    Write-ColorOutput Red "❌ wasm32-wasip1 target is not installed!"
+    Write-Output ""
+    Write-Output "Installing wasm32-wasip1 target..."
+    rustup target add wasm32-wasip1
+
+    if ($LASTEXITCODE -ne 0) {
+        Write-ColorOutput Red "❌ Failed to install wasm32-wasip1 target!"
+        Write-Output ""
+        Write-Output "Please run this command manually:"
+        Write-Output "  rustup target add wasm32-wasip1"
+        Write-Output ""
+        Write-Output "Then run this script again."
+        exit 1
+    }
+    Write-ColorOutput Green "✓ wasm32-wasip1 target installed successfully!"
+} else {
+    Write-ColorOutput Green "✓ wasm32-wasip1 target already installed"
+}
+
+Write-Output ""
+
 # Build the LSP server first (native binary)
 Write-ColorOutput Yellow "🔨 Building LSP server..."
 cargo build --release --bin lsp-server

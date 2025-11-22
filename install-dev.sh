@@ -33,6 +33,57 @@ echo -e "${BLUE}Installed directory:${NC} $INSTALLED_DIR"
 echo -e "${BLUE}Work directory:${NC} $WORK_DIR"
 echo ""
 
+# Check prerequisites
+echo -e "${YELLOW}🔍 Checking prerequisites...${NC}"
+
+# Check if Rust is installed
+if ! command -v rustc &> /dev/null; then
+    echo -e "${RED}❌ Rust is not installed!${NC}"
+    echo ""
+    echo "Please install Rust first:"
+    echo "  curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh"
+    echo ""
+    echo "After installation, restart your terminal and run this script again."
+    exit 1
+fi
+
+# Check if cargo is installed
+if ! command -v cargo &> /dev/null; then
+    echo -e "${RED}❌ Cargo is not installed!${NC}"
+    echo ""
+    echo "Please install Rust (which includes Cargo):"
+    echo "  curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh"
+    echo ""
+    echo "After installation, restart your terminal and run this script again."
+    exit 1
+fi
+
+echo -e "${GREEN}✓ Rust installed:${NC} $(rustc --version)"
+echo -e "${GREEN}✓ Cargo installed:${NC} $(cargo --version)"
+
+# Check if wasm32-wasip1 target is installed
+if ! rustup target list | grep -q "wasm32-wasip1 (installed)"; then
+    echo -e "${RED}❌ wasm32-wasip1 target is not installed!${NC}"
+    echo ""
+    echo "Installing wasm32-wasip1 target..."
+    rustup target add wasm32-wasip1
+
+    if [ $? -ne 0 ]; then
+        echo -e "${RED}❌ Failed to install wasm32-wasip1 target!${NC}"
+        echo ""
+        echo "Please run this command manually:"
+        echo "  rustup target add wasm32-wasip1"
+        echo ""
+        echo "Then run this script again."
+        exit 1
+    fi
+    echo -e "${GREEN}✓ wasm32-wasip1 target installed successfully!${NC}"
+else
+    echo -e "${GREEN}✓ wasm32-wasip1 target already installed${NC}"
+fi
+
+echo ""
+
 # Build the LSP server first (native binary)
 echo -e "${YELLOW}🔨 Building LSP server...${NC}"
 cargo build --release --bin lsp-server --features lsp

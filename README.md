@@ -86,8 +86,18 @@ The extension requires building both WASM and a native LSP server binary.
 
 2. Run the installation script:
    ```bash
+   # macOS/Linux
    ./install-dev.sh
+   
+   # Windows (PowerShell)
+   .\install-dev.ps1
    ```
+   
+   The script will automatically:
+   - Check if Rust and Cargo are installed
+   - Install the `wasm32-wasip1` target if not present
+   - Build the LSP server and WASM extension
+   - Copy files to the correct Zed directories
 
 3. **Completely quit and restart Zed** (Cmd+Q, not just close the window)
 
@@ -98,6 +108,8 @@ The extension requires building both WASM and a native LSP server binary.
 
 #### What the Install Script Does
 
+- ✅ Verifies Rust and Cargo are installed
+- ✅ Automatically installs `wasm32-wasip1` target if missing
 - ✅ Builds the LSP server binary (native, ~3.8MB with `reqwest`)
 - ✅ Builds the WASM extension (~1.7MB)
 - ✅ Copies all files to Zed's extension directories (`installed/` and `work/`)
@@ -581,11 +593,50 @@ Add custom shortcuts to your Zed `keymap.json`:
 
 ## Troubleshooting
 
+### Installation Issues
+
+**Error: "can't find crate for `core`" or "wasm32-wasip1 target may not be installed"**
+
+This means the WebAssembly target isn't installed. The install script should handle this automatically, but if you see this error:
+
+```bash
+rustup target add wasm32-wasip1
+```
+
+Then run the install script again.
+
+**Error: "rustc: command not found" or "cargo: command not found"**
+
+Rust is not installed or not in your PATH. Install Rust:
+
+```bash
+# macOS/Linux
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+
+# Windows
+# Download from https://rustup.rs/
+```
+
+After installation, restart your terminal and try again.
+
+**Install script fails on Windows**
+
+Make sure you're running PowerShell (not Command Prompt):
+```powershell
+.\install-dev.ps1
+```
+
+If you get execution policy errors:
+```powershell
+Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+```
+
 ### Extension not loading
 
 1. Ensure you have the latest version of Zed installed
 2. Check the Zed logs for any error messages
-3. Try reinstalling the extension
+3. **Completely quit Zed** (Cmd+Q on macOS, Alt+F4 on Windows) and restart
+4. Try reinstalling the extension
 
 ### Requests failing
 
