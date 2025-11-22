@@ -99,12 +99,23 @@ The extension requires building both WASM and a native LSP server binary.
    - Build the LSP server and WASM extension
    - Copy files to the correct Zed directories
 
-3. **Completely quit and restart Zed** (Cmd+Q, not just close the window)
+3. **Verify the installation** (optional but recommended):
+   ```bash
+   ./verify-installation.sh
+   ```
+   
+   This will check that all files are in the correct locations.
 
-4. Verify installation:
-   - Open command palette (`Cmd+Shift+P`)
+4. **Completely quit and restart Zed** (Cmd+Q on macOS, Alt+F4 on Windows/Linux)
+   - ⚠️ **IMPORTANT**: Don't just close the window - fully quit the application
+   - On macOS: Use Cmd+Q or Zed menu → Quit Zed
+   - On Windows/Linux: Use Alt+F4 or File → Exit
+
+5. Verify the extension appears in Zed:
+   - Open command palette (`Cmd+Shift+P` or `Ctrl+Shift+P`)
    - Type "zed: extensions"
-   - You should see "REST Client" listed
+   - Look for "REST Client" in the installed extensions list
+   - If you don't see it, see [Extension Not Appearing](#extension-not-appearing) below
 
 #### What the Install Script Does
 
@@ -631,12 +642,68 @@ If you get execution policy errors:
 Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
 ```
 
+### Extension Not Appearing
+
+If the extension doesn't appear in Zed after installation:
+
+1. **Verify files were installed correctly**:
+   ```bash
+   ./verify-installation.sh
+   ```
+
+2. **Check the installation directories exist**:
+   ```bash
+   # macOS
+   ls -la "$HOME/Library/Application Support/Zed/extensions/installed/rest-client/"
+   ls -la "$HOME/Library/Application Support/Zed/extensions/work/rest-client/"
+   
+   # Linux
+   ls -la "$HOME/.local/share/zed/extensions/installed/rest-client/"
+   ls -la "$HOME/.local/share/zed/extensions/work/rest-client/"
+   ```
+   
+   You should see: `extension.toml`, `extension.wasm`, `lsp-server`, and `languages/`
+
+3. **Ensure Zed was fully restarted**:
+   - Don't just close the window - fully quit the application
+   - macOS: Cmd+Q (or Zed menu → Quit Zed)
+   - Windows/Linux: Alt+F4 (or File → Exit)
+   - Wait 2-3 seconds, then restart Zed
+
+4. **Check Zed version**:
+   - The extension requires Zed 0.100.0 or later
+   - Help → About Zed to check your version
+
+5. **Check Zed logs for errors**:
+   - Open: Help → View Error Log
+   - Look for errors related to "rest-client"
+   - Common issues include LSP server permissions or WASM loading errors
+
+6. **Try a clean reinstall**:
+   ```bash
+   # Remove existing installation
+   rm -rf "$HOME/Library/Application Support/Zed/extensions/installed/rest-client"
+   rm -rf "$HOME/Library/Application Support/Zed/extensions/work/rest-client"
+   
+   # Reinstall
+   ./install-dev.sh
+   
+   # Restart Zed completely
+   ```
+
+7. **Check LSP server permissions**:
+   ```bash
+   # macOS
+   chmod +x "$HOME/Library/Application Support/Zed/extensions/installed/rest-client/lsp-server"
+   chmod +x "$HOME/Library/Application Support/Zed/extensions/work/rest-client/lsp-server"
+   ```
+
 ### Extension not loading
 
-1. Ensure you have the latest version of Zed installed
-2. Check the Zed logs for any error messages
+1. Ensure you have the latest version of Zed installed (0.100.0+)
+2. Check the Zed logs for any error messages (Help → View Error Log)
 3. **Completely quit Zed** (Cmd+Q on macOS, Alt+F4 on Windows) and restart
-4. Try reinstalling the extension
+4. Try reinstalling the extension using the steps above
 
 ### Requests failing
 
