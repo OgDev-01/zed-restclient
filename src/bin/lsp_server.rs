@@ -80,7 +80,7 @@ async fn shutdown_signal() {
 
     #[cfg(windows)]
     {
-        signal::ctrl_c()
+        tokio::signal::ctrl_c()
             .await
             .expect("Failed to install Ctrl+C handler");
         eprintln!("[rest-client-lsp] Received Ctrl+C");
