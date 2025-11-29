@@ -25,12 +25,6 @@ jobs:
           - os: macos-latest
             target: aarch64-apple-darwin
             artifact_name: lsp-server-darwin-arm64
-          - os: ubuntu-latest
-            target: x86_64-unknown-linux-gnu
-            artifact_name: lsp-server-linux-x64
-          - os: ubuntu-latest
-            target: aarch64-unknown-linux-gnu
-            artifact_name: lsp-server-linux-arm64
           - os: windows-latest
             target: x86_64-pc-windows-msvc
             artifact_name: lsp-server-windows-x64.exe
@@ -46,16 +40,8 @@ jobs:
         with:
           targets: ${{ matrix.target }}
 
-      - name: Install cross-compilation tools (Linux ARM64)
-        if: matrix.target == 'aarch64-unknown-linux-gnu'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y gcc-aarch64-linux-gnu
-
       - name: Build LSP server
         run: cargo build --bin lsp-server --release --target ${{ matrix.target }} --features lsp
-        env:
-          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
 
       - name: Rename binary (Unix)
         if: runner.os != 'Windows'
@@ -116,9 +102,9 @@ jobs:
             |----------|--------|
             | macOS (Apple Silicon) | `lsp-server-darwin-arm64` |
             | macOS (Intel) | `lsp-server-darwin-x64` |
-            | Linux (x64) | `lsp-server-linux-x64` |
-            | Linux (ARM64) | `lsp-server-linux-arm64` |
             | Windows (x64) | `lsp-server-windows-x64.exe` |
+
+            > **Note:** Linux binaries are not yet available. Linux support is planned for a future release.
 
             ### Installation
 
