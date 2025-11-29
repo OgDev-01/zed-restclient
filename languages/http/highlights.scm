@@ -1,45 +1,42 @@
-; HTTP Request Syntax Highlighting
-;
-; This file is maintained for backward compatibility with older Tree-sitter setups.
-; The actual highlight queries are defined in queries/highlights.scm
-;
-; For the complete and up-to-date syntax highlighting rules, see:
-; - queries/highlights.scm (main highlighting rules)
-; - queries/injections.scm (embedded language support for JSON, XML, GraphQL)
+; HTTP Request Syntax Highlighting for Zed
+; Uses standard Zed theme captures for consistent coloring
 
-; Include the main highlight queries
-; Note: This is a simple redirect - the actual queries are in the queries/ directory
+; HTTP Methods - highlight as keywords (GET, POST, PUT, DELETE, etc.)
+(method) @keyword
 
-; HTTP Methods - highlight as keywords
-(method) @keyword.method
+; URLs - highlight as links
+(target) @link_uri
 
-; URLs - highlight as special strings
-(target) @string.special.url
-
-; HTTP Version
+; HTTP Version (HTTP/1.1, HTTP/2, etc.)
 (http_version) @constant
 
-; Request Separator
-(request_separator) @keyword.delimiter
+; Request Separator (###)
+(request_separator) @punctuation.special
 
 ; Headers
 (header_name) @property
 (header_value) @string
 
-; Special headers
-((header_name) @property.special
-  (#match? @property.special "^(Content-Type|Authorization|Accept|User-Agent|Accept-Encoding|Cache-Control|Connection|Host|Origin|Referer)$"))
-
-; Comments
+; Comments (# or //)
 (comment) @comment
 
-; Request Body
-(body_content) @string
+; Request Body - treat as embedded content
+(body_content) @embedded
 
 ; Punctuation
 ":" @punctuation.delimiter
 
-; Content-Type values
+; Variables {{variable_name}} - highlight the whole variable
+(variable) @variable.special
+
+; Variable name inside braces
+(variable_name) @variable.special
+
+; Variable braces
+"{{" @punctuation.bracket
+"}}" @punctuation.bracket
+
+; Special Content-Type values
 ((header_value) @string.special
   (#match? @string.special "application/(json|xml|graphql|x-www-form-urlencoded)"))
 
@@ -49,7 +46,7 @@
 ((header_value) @string.special
   (#match? @string.special "multipart/form-data"))
 
-; Authentication patterns
+; Authentication tokens (Bearer, Basic)
 ((header_value) @string.special
   (#match? @string.special "^Bearer "))
 
