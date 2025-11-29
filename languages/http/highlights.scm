@@ -1,13 +1,13 @@
 ; HTTP Request Syntax Highlighting for Zed
-; Uses standard Zed theme captures for consistent coloring
+; Uses only valid nodes from the tree-sitter-http grammar
 
-; HTTP Methods - highlight as keywords (GET, POST, PUT, DELETE, etc.)
+; HTTP Methods (GET, POST, PUT, DELETE, etc.)
 (method) @keyword
 
-; URLs - highlight as links
-(target) @link_uri
+; URLs/targets
+(target) @string.special
 
-; HTTP Version (HTTP/1.1, HTTP/2, etc.)
+; HTTP Version (HTTP/1.1, HTTP/2)
 (http_version) @constant
 
 ; Request Separator (###)
@@ -17,38 +17,11 @@
 (header_name) @property
 (header_value) @string
 
-; Comments (# or //)
+; Comments
 (comment) @comment
 
-; Request Body - treat as embedded content
-(body_content) @embedded
+; Request Body content
+(body_content) @string
 
 ; Punctuation
 ":" @punctuation.delimiter
-
-; Variables {{variable_name}} - highlight the whole variable
-(variable) @variable.special
-
-; Variable name inside braces
-(variable_name) @variable.special
-
-; Variable braces
-"{{" @punctuation.bracket
-"}}" @punctuation.bracket
-
-; Special Content-Type values
-((header_value) @string.special
-  (#match? @string.special "application/(json|xml|graphql|x-www-form-urlencoded)"))
-
-((header_value) @string.special
-  (#match? @string.special "text/(xml|html|plain|css|javascript)"))
-
-((header_value) @string.special
-  (#match? @string.special "multipart/form-data"))
-
-; Authentication tokens (Bearer, Basic)
-((header_value) @string.special
-  (#match? @string.special "^Bearer "))
-
-((header_value) @string.special
-  (#match? @string.special "^Basic "))
