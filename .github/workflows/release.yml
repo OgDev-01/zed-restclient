@@ -1,0 +1,265 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump_type:
+        description: "Version bump type"
+        required: true
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+      changelog:
+        description: "Changelog entry for this release"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  bump-version:
+    runs-on: ubuntu-latest
+    outputs:
+      new_version: ${{ steps.bump.outputs.new_version }}
+      tag_name: ${{ steps.bump.outputs.tag_name }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Get current version
+        id: current
+        run: |
+          CURRENT_VERSION=$(grep '^version = ' extension.toml | head -1 | sed 's/version = "\(.*\)"/\1/')
+          echo "current_version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
+          echo "Current version: $CURRENT_VERSION"
+
+      - name: Calculate new version
+        id: bump
+        run: |
+          CURRENT="${{ steps.current.outputs.current_version }}"
+          IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT"
+
+          case "${{ inputs.bump_type }}" in
+            major)
+              NEW_VERSION="$((MAJOR + 1)).0.0"
+              ;;
+            minor)
+              NEW_VERSION="${MAJOR}.$((MINOR + 1)).0"
+              ;;
+            patch)
+              NEW_VERSION="${MAJOR}.${MINOR}.$((PATCH + 1))"
+              ;;
+          esac
+
+          echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
+          echo "tag_name=v$NEW_VERSION" >> $GITHUB_OUTPUT
+          echo "New version: $NEW_VERSION"
+
+      - name: Update version in extension.toml
+        run: |
+          sed -i 's/^version = ".*"/version = "${{ steps.bump.outputs.new_version }}"/' extension.toml
+
+      - name: Update version in Cargo.toml
+        run: |
+          sed -i 's/^version = ".*"/version = "${{ steps.bump.outputs.new_version }}"/' Cargo.toml
+
+      - name: Update CHANGELOG.md
+        run: |
+          DATE=$(date +%Y-%m-%d)
+          VERSION="${{ steps.bump.outputs.new_version }}"
+          CHANGELOG_MSG="${{ inputs.changelog }}"
+
+          if [ -f CHANGELOG.md ]; then
+            # Create a temp file with the new entry
+            {
+              echo "# Changelog"
+              echo ""
+              echo "All notable changes to the REST Client extension for Zed will be documented in this file."
+              echo ""
+              echo "The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),"
+              echo "and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html)."
+              echo ""
+              echo "## [Unreleased]"
+              echo ""
+              echo "## [${VERSION}] - ${DATE}"
+              echo ""
+              echo "### Changed"
+              echo ""
+              echo "${CHANGELOG_MSG}"
+              echo ""
+              # Append everything after the [Unreleased] section from existing changelog
+              sed -n '/^## \[Unreleased\]/,$ { /^## \[Unreleased\]/d; p }' CHANGELOG.md
+            } > CHANGELOG.tmp
+            mv CHANGELOG.tmp CHANGELOG.md
+          else
+            # Create new CHANGELOG.md
+            cat > CHANGELOG.md << EOF
+          # Changelog
+
+          All notable changes to the REST Client extension for Zed will be documented in this file.
+
+          The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+          and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+          ## [Unreleased]
+
+          ## [${VERSION}] - ${DATE}
+
+          ### Changed
+
+          ${CHANGELOG_MSG}
+          EOF
+          fi
+
+      - name: Commit version bump
+        run: |
+          git add extension.toml Cargo.toml CHANGELOG.md
+          git commit -m "chore: bump version to ${{ steps.bump.outputs.new_version }}"
+          git push
+
+      - name: Create and push tag
+        run: |
+          git tag -a "${{ steps.bump.outputs.tag_name }}" -m "Release ${{ steps.bump.outputs.tag_name }}"
+          git push origin "${{ steps.bump.outputs.tag_name }}"
+
+  build-lsp:
+    needs: bump-version
+    strategy:
+      matrix:
+        include:
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            artifact_name: lsp-server-darwin-x64
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            artifact_name: lsp-server-darwin-arm64
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            artifact_name: lsp-server-windows-x64.exe
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.bump-version.outputs.tag_name }}
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ matrix.target }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-${{ matrix.target }}-
+
+      - name: Build LSP server
+        run: cargo build --bin lsp-server --release --target ${{ matrix.target }} --features lsp
+
+      - name: Rename binary (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          cp target/${{ matrix.target }}/release/lsp-server ${{ matrix.artifact_name }}
+          chmod +x ${{ matrix.artifact_name }}
+
+      - name: Rename binary (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          copy target\${{ matrix.target }}\release\lsp-server.exe ${{ matrix.artifact_name }}
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: ${{ matrix.artifact_name }}
+          retention-days: 1
+
+  create-release:
+    needs: [bump-version, build-lsp]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.bump-version.outputs.tag_name }}
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Prepare release assets
+        run: |
+          mkdir -p release
+          for dir in artifacts/*/; do
+            cp "$dir"* release/
+          done
+          ls -la release/
+
+      - name: Extract changelog entry
+        id: changelog
+        run: |
+          # Get the changelog entry for this version
+          ENTRY=$(awk '/^## \[${{ needs.bump-version.outputs.new_version }}\]/{flag=1; next} /^## \[/{flag=0} flag' CHANGELOG.md)
+          echo "entry<<EOF" >> $GITHUB_OUTPUT
+          echo "$ENTRY" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.bump-version.outputs.tag_name }}
+          name: REST Client ${{ needs.bump-version.outputs.tag_name }}
+          body: |
+            ## What's Changed
+
+            ${{ inputs.changelog }}
+
+            ## LSP Server Binaries
+
+            Download the appropriate binary for your platform:
+
+            | Platform | Binary |
+            |----------|--------|
+            | macOS (Apple Silicon) | `lsp-server-darwin-arm64` |
+            | macOS (Intel) | `lsp-server-darwin-x64` |
+            | Windows (x64) | `lsp-server-windows-x64.exe` |
+
+            > **Note:** Linux binaries are not yet available due to OpenSSL build issues. Linux support is planned for a future release.
+
+            ### Installation
+
+            The Zed extension will automatically download the correct binary when you install the extension.
+
+            For manual installation:
+            1. Download the binary for your platform
+            2. Make it executable: `chmod +x lsp-server-*` (Unix only)
+            3. Place it in your PATH or the extension's work directory
+
+            ---
+
+            **Full Changelog**: https://github.com/${{ github.repository }}/compare/v${{ needs.bump-version.outputs.new_version }}...HEAD
+          files: release/*
+          draft: false
+          prerelease: false
