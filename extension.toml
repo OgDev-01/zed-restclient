@@ -1,21 +1,18 @@
 id = "rest-client"
 name = "REST Client"
 description = "Send HTTP requests and view responses directly in Zed. Supports .http and .rest files with variable substitution, environments, and request history."
-version = "0.1.0"
+version = "0.2.0"
 schema_version = 1
 authors = ["ogdev-01"]
 repository = "https://github.com/ogdev-01/zed-restclient"
 
 [grammars.http]
-repository = "file:///Users/ogdev/work/personal/zed-extentions/rest-client"
-commit = "7c3c3cb2d10276b920925e96d93b384ed6722725"
-path = "languages/http"
-
-languages = ["languages/http"]
+repository = "https://github.com/OgDev-01/tree-sitter-http"
+rev = "de8631a0df04f9031cbd5d378199b44e82933bd6"
 
 [language_servers.rest-client-lsp]
 name = "REST Client LSP"
-languages = ["HTTP"]
+language = "HTTP"
 
 [slash_commands.send-request]
 description = "Execute an HTTP request and display the response"

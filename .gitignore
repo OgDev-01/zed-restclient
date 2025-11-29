@@ -41,6 +41,11 @@ Cargo.lock
 
 # LSP server binaries (except the packaged one at root)
 /target/lsp-binaries/
+/release-binaries/
+
+# Grammars directory (Zed clones this from GitHub)
+/grammars/
+
 /*.md
 !/README.md
 !/CHANGELOG.md

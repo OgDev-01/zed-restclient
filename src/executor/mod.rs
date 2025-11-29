@@ -346,10 +346,19 @@ fn execute_request_internal(
     let timing = timing_checkpoints.to_request_timing();
     let total_duration = timing.total();
 
-    // LIMITATION: Zed HTTP client does not provide status codes
-    // We assume 200 OK for successful requests
+    // KNOWN LIMITATION: Zed's WASM HTTP client API does not return HTTP status codes
+    // The zed_extension_api::http_client module only provides headers and body.
+    // As a result, we cannot distinguish between 200 OK, 201 Created, 204 No Content, etc.
+    // All successful responses are reported as "200 OK (assumed)".
+    //
+    // Workaround options for users needing accurate status codes:
+    // 1. Use the LSP server which uses reqwest and has full status code support
+    // 2. Check response headers for status-related information
+    // 3. Use an external HTTP client for critical status code checks
+    //
+    // See: https://github.com/zed-industries/zed/issues/XXXX (if tracking issue exists)
     let status_code = 200u16;
-    let status_text = "OK".to_string();
+    let status_text = "OK (assumed - Zed API limitation)".to_string();
 
     // Extract headers from response
     let mut headers = std::collections::HashMap::new();

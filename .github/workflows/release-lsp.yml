@@ -1,0 +1,133 @@
+name: Release LSP Binaries
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version tag (e.g., v0.2.0)"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            artifact_name: lsp-server-darwin-x64
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            artifact_name: lsp-server-darwin-arm64
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            artifact_name: lsp-server-linux-x64
+          - os: ubuntu-latest
+            target: aarch64-unknown-linux-gnu
+            artifact_name: lsp-server-linux-arm64
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            artifact_name: lsp-server-windows-x64.exe
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Install cross-compilation tools (Linux ARM64)
+        if: matrix.target == 'aarch64-unknown-linux-gnu'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu
+
+      - name: Build LSP server
+        run: cargo build --bin lsp-server --release --target ${{ matrix.target }} --features lsp
+        env:
+          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
+
+      - name: Rename binary (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          cp target/${{ matrix.target }}/release/lsp-server ${{ matrix.artifact_name }}
+          chmod +x ${{ matrix.artifact_name }}
+
+      - name: Rename binary (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          copy target\${{ matrix.target }}\release\lsp-server.exe ${{ matrix.artifact_name }}
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: ${{ matrix.artifact_name }}
+          retention-days: 1
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Prepare release assets
+        run: |
+          mkdir -p release
+          for dir in artifacts/*/; do
+            cp "$dir"* release/
+          done
+          ls -la release/
+
+      - name: Determine version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            echo "version=${{ inputs.version }}" >> $GITHUB_OUTPUT
+          else
+            echo "version=${{ github.ref_name }}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create or update release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.version }}
+          name: REST Client LSP ${{ steps.version.outputs.version }}
+          body: |
+            ## LSP Server Binaries
+
+            Download the appropriate binary for your platform:
+
+            | Platform | Binary |
+            |----------|--------|
+            | macOS (Apple Silicon) | `lsp-server-darwin-arm64` |
+            | macOS (Intel) | `lsp-server-darwin-x64` |
+            | Linux (x64) | `lsp-server-linux-x64` |
+            | Linux (ARM64) | `lsp-server-linux-arm64` |
+            | Windows (x64) | `lsp-server-windows-x64.exe` |
+
+            ### Installation
+
+            The Zed extension will automatically download the correct binary.
+
+            For manual installation:
+            1. Download the binary for your platform
+            2. Make it executable: `chmod +x lsp-server-*` (Unix only)
+            3. Place it in your PATH or the extension's work directory
+          files: release/*
+          draft: false
+          prerelease: false

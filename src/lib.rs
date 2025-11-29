@@ -74,6 +74,7 @@ pub mod formatter;
 pub mod graphql;
 pub mod history;
 pub mod language_server;
+pub mod lsp_download;
 #[cfg(feature = "lsp")]
 pub mod lsp_server;
 pub mod models;
@@ -108,36 +109,44 @@ impl zed::Extension for RestClientExtension {
 
     fn language_server_command(
         &mut self,
-        language_server_id: &zed::LanguageServerId,
+        _language_server_id: &zed::LanguageServerId,
         worktree: &zed::Worktree,
     ) -> zed::Result<zed::Command> {
-        // The lsp-server binary should be in the extension directory
-        // Zed extensions run from their installation directory, so we can use a relative path
-        // The binary is installed alongside extension.wasm
+        // First, check if the LSP binary is available in PATH
+        if let Some(binary_path) = lsp_download::find_binary_in_path(worktree) {
+            return Ok(zed::Command {
+                command: binary_path,
+                args: vec![],
+                env: vec![],
+            });
+        }
 
-        // Determine binary name based on platform
-        let binary_name = if cfg!(target_os = "windows") {
-            "lsp-server.exe"
-        } else {
-            "lsp-server"
-        };
+        // Try to download the binary to the extension's work directory
+        let work_directory = worktree
+            .shell_env()
+            .iter()
+            .find(|(key, _)| key == "ZED_EXTENSION_WORK_DIR")
+            .map(|(_, value)| value.clone())
+            .unwrap_or_else(|| ".".to_string());
 
-        // First try to find it on PATH (in case user has it installed)
-        let command = worktree.which(binary_name).unwrap_or_else(|| {
-            // Fallback to relative path in extension directory
-            // This works because Zed runs the extension from its install directory
-            if cfg!(target_os = "windows") {
-                ".\\lsp-server.exe".to_string()
-            } else {
-                "./lsp-server".to_string()
+        match lsp_download::LspBinaryManager::new(work_directory) {
+            Ok(manager) => match manager.ensure_binary() {
+                Ok(binary_path) => Ok(zed::Command {
+                    command: binary_path,
+                    args: vec![],
+                    env: vec![],
+                }),
+                Err(error) => {
+                    // Log error but don't fail - extension works without LSP
+                    let error_message = lsp_download::format_error_message(&error);
+                    Err(error_message)
+                }
+            },
+            Err(error) => {
+                let error_message = lsp_download::format_error_message(&error);
+                Err(error_message)
             }
-        });
-
-        Ok(zed::Command {
-            command,
-            args: vec![],
-            env: vec![],
-        })
+        }
     }
 
     fn language_server_initialization_options(

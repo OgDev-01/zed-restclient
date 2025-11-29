@@ -718,6 +718,35 @@ If the extension doesn't appear in Zed after installation:
 2. Reload Zed or restart the editor
 3. Check if the language mode is set to "HTTP" in the status bar
 
+## ⚠️ Known Limitations
+
+### HTTP Status Codes Not Available
+
+Due to limitations in Zed's WASM extension HTTP client API, **HTTP status codes are not returned** from requests. All successful responses are reported as "200 OK (assumed)".
+
+**Workarounds:**
+- The LSP server (if installed) uses `reqwest` which has full status code support
+- Check response headers for status-related information
+- Use response body content to determine success/failure
+- For critical status code checks, use an external HTTP client
+
+### Grammar Repository Requirement
+
+The extension's tree-sitter grammar must be hosted in a separate Git repository for distribution. During development, you can use the local grammar, but for published extensions, the grammar must be accessible via a Git URL.
+
+### LSP Binary Download
+
+The LSP server binary is downloaded automatically on first use from GitHub releases. If the download fails:
+- Check your network connection
+- Manually download from [GitHub Releases](https://github.com/ogdev-01/zed-restclient/releases)
+- Place the binary in your PATH or the extension's work directory
+
+The extension works without the LSP server, but you'll lose features like:
+- Code lenses (clickable "Send Request" above each request)
+- Variable autocompletion
+- Hover information
+- Real-time diagnostics
+
 ## 🔧 Troubleshooting
 
 ### Common Issues

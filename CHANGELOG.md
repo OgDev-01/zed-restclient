@@ -5,6 +5,42 @@ All notable changes to the REST Client extension for Zed will be documented in t
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+## [0.2.0] - 2024-12-XX
+
+### 🔧 Major Restructure - Zed Extension Compatibility
+
+This release fixes fundamental structural issues that prevented the extension from working correctly as a Zed extension.
+
+### ⚠️ Breaking Changes
+- **Extension Structure**: Removed duplicate codebase in `grammars/http/src/` that caused conflicts
+- **Grammar Configuration**: Changed from local `file://` path to GitHub repository URL
+- **LSP Binary**: Changed from relative path to automatic download from GitHub releases
+- Users must reinstall the extension after upgrading
+
+### 🐛 Fixed
+- **Duplicate Extension Manifests**: Removed `grammars/http/extension.toml` and `grammars/http/Cargo.toml`
+- **Duplicate Highlight Queries**: Consolidated to single `languages/http/queries/highlights.scm`
+- **Grammar Path**: Fixed invalid `file://` local path that only worked on one developer's machine
+- **LSP Binary Location**: Extension no longer expects `./lsp-server` which doesn't work in Zed's sandbox
+
+### ✨ Added
+- **LSP Binary Auto-Download**: New `lsp_download` module automatically downloads LSP binary from GitHub releases
+- **Platform Detection**: Automatic detection of macOS (x64/arm64), Linux (x64/arm64), Windows (x64)
+- **Binary Caching**: Downloaded binary is cached with version checking for automatic updates
+- **Known Limitations Section**: Added documentation about HTTP status code limitation
+
+### 📝 Changed
+- **HTTP Status Text**: Now shows "200 OK (assumed - Zed API limitation)" to clarify status code limitation
+- **Directory Structure**: Grammar files moved to `grammars/http/`, language config in `languages/http/`
+- **Version Bumped**: Extension version updated to 0.2.0
+
+### 📚 Documentation
+- Added "Known Limitations" section to README explaining HTTP status code issue
+- Updated installation instructions for new structure
+- Documented manual LSP binary installation as fallback
+
 ## [0.1.0] - 2024-11-21
 
 ### 🎉 Initial Release
