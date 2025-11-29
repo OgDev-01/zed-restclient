@@ -121,15 +121,8 @@ impl zed::Extension for RestClientExtension {
             });
         }
 
-        // Try to download the binary to the extension's work directory
-        let work_directory = worktree
-            .shell_env()
-            .iter()
-            .find(|(key, _)| key == "ZED_EXTENSION_WORK_DIR")
-            .map(|(_, value)| value.clone())
-            .unwrap_or_else(|| ".".to_string());
-
-        match lsp_download::LspBinaryManager::new(work_directory) {
+        // Try to download the binary using Zed's native GitHub release API
+        match lsp_download::LspBinaryManager::new() {
             Ok(manager) => match manager.ensure_binary() {
                 Ok(binary_path) => Ok(zed::Command {
                     command: binary_path,
